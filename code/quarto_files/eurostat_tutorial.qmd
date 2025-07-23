@@ -1,0 +1,95 @@
+---
+title: "Using eurostat to obtain music related data"
+format: pdf
+editor: visual
+---
+
+This document goes over how the `eurostat` R package can be used to retrieve music, and other cultural data.
+
+### Setup
+
+To begin we need to install the packages needed in this document.
+
+```{r}
+#| eval: FALSE
+# Installing eurostat
+install.packages("eurostat")
+# Installing other packages used in this document
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("stringr")
+```
+
+After installing we can load the package to get access to the functions provided by it.
+
+```{r}
+#| output: FALSE
+# Loading eurostat
+library(eurostat)
+# Other useful packages
+library(dplyr) # helps with data manipulation
+library(ggplot2) # helps with data vizualisation
+```
+
+### Finding and retrieving the data
+
+Let's start by going over how to search for datasets from the Eurostat database. This can be done by using function `search_eurostat()`.
+
+```{r}
+# Searching for datasets
+ym <- search_eurostat("cultural or sport")
+```
+
+We can now take a look at the datasets that match our search phrase.
+
+```{r}
+# First six results from the search
+head(ym)
+```
+
+We see that the there are several datasets about participation in cultural or sport activities. Let's take a close look at at the dataset "Persons participating in cultural or sport activities in the last 12 months by income quintile, household composition, degree of urbanisation and frequency." The code for this dataset is "ilc_scp04." After we have the dataset we can use the code corresponding to the dataset to obtain retrieve it from the Eurostat database. This can be done using the `get_eurostat()` function.
+
+```{r}
+#| output: FALSE
+# Retrieving the dataset
+y <- get_eurostat(id = "ilc_scp04")
+```
+
+Let's take a look at the dataset.
+
+```{r}
+# First six rows of the dataset
+head(y)
+```
+
+We can see that by default the dataset retrieved uses code for the column values. We can change this by using the `label_eurostat()` function.
+
+```{r}
+# Labeling the codes in the dataset
+y <- label_eurostat(y)
+```
+
+Let's look at the data again.
+
+```{r}
+# First six rows of the dataset
+head(y)
+```
+
+Now the dataset values are labelled. Let's plot the percentage of people who attended different kinds of cultural or sport activities at least once in Finland, Denmark and Sweden.
+
+```{r}
+y %>%
+    filter(geo %in% c("Finland", "Sweden", "Denmark"), deg_urb == "Total",
+           frequenc == "At least once", hhcomp == "Total", quant_inc == "Total") %>%
+    mutate(acl00 = stringr::str_wrap(acl00, width = 40)) %>%
+    ggplot(aes(x = TIME_PERIOD, y = values, color = geo, linetype = acl00)) +
+    geom_line() + geom_point() + theme_bw() + 
+    labs(color = "Country", y = "Percentage", x = "Year", linetype = "Activity") 
+```
+
+The dataset has values at two time points 2015 and 2022. We can see that all the activities have seen decrease in attendance.
+
+### Conclusion
+
+This document has provided an cursory overview of how the `eurostat` package can be used to retrieve music and culture related data from the Eurostat database. For more detailed tutorial of the package you can check out [eurostat package's website](https://ropengov.github.io/eurostat/index.html) or [GitHub page](https://github.com/rOpenGov/eurostat/). For more details about the Eurostat, you can check the database's [website](https://ec.europa.eu/eurostat).

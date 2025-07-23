@@ -1,0 +1,222 @@
+---
+title: "Census analysis tables"
+format: pdf
+editor: visual
+execute:
+  echo: FALSE
+  warning: FALSE
+---
+
+This document will have tables of the different audience census questions.
+
+```{r}
+#| output: FALSE
+# Loading packages needed
+library(tidyverse) 
+library(haven)
+library(kableExtra)
+library(janitor)
+```
+
+```{r}
+# Setting kable NA values to 0
+options(knitr.kable.NA = 0)
+```
+
+## Tables
+
+```{r}
+# Loading combined census data
+census_data_all <- read_sav("../../input/data_processed/combined_census_data.sav") %>%
+  filter(exclude == 0) # Filtering out bad responses
+# Reading the captions
+census_captions <- readxl::read_excel("../../input/other/codebook.xlsx", sheet = 6)
+```
+
+```{r}
+# Year of birth table
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Age_group, name = "Count") %>%
+    na.omit() %>%
+    arrange(Age_group, City) %>%
+    pivot_wider(id_cols = City, names_from = Age_group, values_from = Count) %>%
+    adorn_totals() %>%
+    t() %>%
+    kable(caption = census_captions %>%
+          filter(question == "Age_group") %>%
+          select(caption))
+```
+
+```{r}
+census_data_all %>% 
+  haven::as_factor() %>%
+  count(City, Q2) %>%
+  na.omit() %>%
+  arrange(City) %>%
+  pivot_wider(id_cols = City, names_from = Q2, values_from = n) %>%
+  adorn_totals() %>%
+  t() %>%
+  kable(caption = census_captions %>%
+          filter(question == "Q2") %>%
+          select(caption))
+```
+
+```{r}
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Q4) %>%
+    na.omit() %>%
+    arrange(City) %>%
+    pivot_wider(id_cols = City, names_from = Q4, values_from = n) %>%
+    adorn_totals() %>%
+    t() %>%
+    kable(caption = census_captions %>%
+          filter(question == "Q4") %>%
+          select(caption))
+```
+
+```{r}
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Q7) %>%
+    na.omit() %>%
+    arrange(City) %>%
+    pivot_wider(id_cols = City, names_from = Q7, values_from = n) %>%
+    adorn_totals() %>%
+    t() %>%
+    kable(caption = census_captions %>%
+          filter(question == "Q7") %>%
+          select(caption))
+```
+
+```{r}
+census_data_all %>%
+  select(starts_with("Q8"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  count(City, value) %>%
+  arrange(City) %>%
+  pivot_wider(id_cols = City, names_from = value, values_from = n) %>%
+  adorn_totals() %>%
+  t() %>%
+  kable(caption = census_captions %>%
+          filter(question == "Q8") %>%
+          select(caption))
+```
+
+```{r}
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Q9) %>%
+    na.omit() %>%
+    arrange(City) %>%
+    pivot_wider(id_cols = City, names_from = Q9, values_from = n) %>%
+    adorn_totals() %>%
+    t() %>%
+    kable(caption = census_captions %>%
+          filter(question == "Q9") %>%
+          select(caption))
+```
+
+```{r}
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Q11) %>%
+    na.omit() %>%
+    arrange(City) %>%
+    pivot_wider(id_cols = City, names_from = Q11, values_from = n) %>%
+    adorn_totals() %>%
+    t() %>%
+    kable(caption = census_captions %>%
+          filter(question == "Q11") %>%
+          select(caption))
+```
+
+```{r}
+census_data_all %>%
+  select(starts_with("Q12"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  count(City, value, name = "Count") %>%
+  pivot_wider(id_cols = City, names_from = value, values_from = Count) %>%
+  adorn_totals() %>%
+  t() %>%
+  kable(caption = census_captions %>%
+          filter(question == "Q12") %>%
+          select(caption))
+```
+
+```{r}
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Q13) %>%
+    na.omit() %>%
+    arrange(City) %>%
+    pivot_wider(id_cols = City, names_from = Q13, values_from = n) %>%
+    adorn_totals() %>%
+    t() %>%
+    kable(caption = census_captions %>%
+          filter(question == "Q13") %>%
+          select(caption))
+```
+
+```{r}
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Q14) %>%
+    na.omit() %>%
+    arrange(City) %>%
+    pivot_wider(id_cols = City, names_from = Q14, values_from = n) %>%
+    adorn_totals() %>%
+    t() %>%
+    kable(caption = census_captions %>%
+          filter(question == "Q14") %>%
+          select(caption))
+```
+
+```{r}
+census_data_all %>%
+  select(starts_with("Q15"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  count(City, value) %>%
+  pivot_wider(id_cols = City, names_from = value, values_from = n) %>%
+  adorn_totals() %>%
+  t() %>%
+  kable(caption = census_captions %>%
+          filter(question == "Q15") %>%
+          select(caption))
+```
+
+```{r}
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Q16) %>%
+    na.omit() %>%
+    arrange(City) %>%
+    pivot_wider(id_cols = City, names_from = Q16, values_from = n) %>%
+    adorn_totals() %>%
+    t() %>%
+    kable(caption = census_captions %>%
+          filter(question == "Q16") %>%
+          select(caption))
+```
+
+```{r}
+census_data_all %>%
+  select(starts_with("Q17"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  count(City, value) %>%
+  pivot_wider(id_cols = City, names_from = value, values_from = n) %>%
+  adorn_totals() %>%
+  t() %>%
+  kable(caption = census_captions %>%
+          filter(question == "Q17") %>%
+          select(caption))
+```

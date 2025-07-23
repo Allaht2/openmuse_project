@@ -1,0 +1,151 @@
+---
+title: "Missing answers (numbers)"
+format: pdf
+editor: visual
+execute:
+  echo: false
+  warning: false
+---
+
+```{r}
+#| output: FALSE
+# Loading packages needed
+library(tidyverse) 
+library(haven)
+library(kableExtra)
+library(janitor)
+```
+
+```{r}
+# Loading data
+census_data_all <- read_sav("../../input/data_processed/combined_census_data.sav") %>%
+  filter(exclude == 0)
+pre_snapshot <- read_sav("../../input/data_processed/pre_snapshot.sav")
+post_snapshot <- read_sav("../../input/data_processed/post_snapshot.sav") %>%
+  rename(City = Q34)
+# Captions
+census_captions <- readxl::read_excel("../../input/other/codebook.xlsx", sheet = 6)
+pre_captions <- readxl::read_excel("../../input/other/codebook.xlsx", sheet = 7)
+post_captions <- readxl::read_excel("../../input/other/codebook.xlsx", sheet = 8)
+```
+
+```{r}
+census_data_all %>%
+  mutate(Q6 = if_any(starts_with("Q6"), ~!is.na(.)),
+         Q8 = if_any(starts_with("Q8"), ~!is.na(.)),
+         Q12 = if_any(starts_with("Q12"), ~!is.na(.)),
+         Q15 = if_any(starts_with("Q15"), ~!is.na(.)),
+         Q17 = if_any(starts_with("Q17"), ~!is.na(.))) %>%
+  mutate(across(where(is.logical), ~ifelse(. == TRUE, 1, NA))) %>%
+  group_by(City) %>%
+  summarise(across(everything(), ~sum(!is.na(.)))) %>%
+  select(City, num_range("Q", range = 1:30)) %>%
+  select(-Q21, -Q18, -Q10, -Q19) %>%
+  mutate_if(is.numeric, round, 2) %>%
+  t() %>%
+  kable(caption = "Number of answers (audience census)")
+
+census_captions %>%
+  filter(!question %in% c("Age_group", "Q6_spec", "Q6_spec_exc")) %>%
+  kable( caption = "Question codes (audience census)")
+```
+
+```{r}
+census_data_all %>%
+  mutate(Q6 = if_any(starts_with("Q6"), ~!is.na(.)),
+         Q8 = if_any(starts_with("Q8"), ~!is.na(.)),
+         Q12 = if_any(starts_with("Q12"), ~!is.na(.)),
+         Q15 = if_any(starts_with("Q15"), ~!is.na(.)),
+         Q17 = if_any(starts_with("Q17"), ~!is.na(.))) %>%
+  mutate(across(where(is.logical), ~ifelse(. == TRUE, 1, NA))) %>%
+  group_by(City) %>%
+  summarise(across(everything(), ~(1 - mean(is.na(.))) * 100)) %>%
+  select(City, num_range("Q", range = 1:30)) %>%
+  select(-Q21, -Q18, -Q10, -Q19) %>%
+  mutate_if(is.numeric, round, 2) %>%
+  t() %>%
+  kable(caption = "Percentage answered (audience census)")
+
+census_captions %>%
+  filter(!question %in% c("Age_group", "Q6_spec", "Q6_spec_exc")) %>%
+  kable( caption = "Question codes (audience census)")
+```
+
+```{r}
+pre_snapshot %>%
+  select(-Q14_15_TEXT) %>%
+  mutate(Q8 = if_any(starts_with("Q8"), ~!is.na(.)),
+         Q9 = if_any(starts_with("Q9"), ~!is.na(.)),
+         Q12 = if_any(starts_with("Q12"), ~!is.na(.)),
+         Q14 = if_any(starts_with("Q14"), ~!is.na(.))) %>%
+  mutate(across(where(is.logical), ~ifelse(. == TRUE, 1, NA))) %>%
+  group_by(City) %>%
+  summarise(across(everything(), ~sum(!is.na(.)))) %>%
+  select(City, num_range("Q", range = 1:30), Q15_1, Q15_2, Q15_3) %>%
+  select(City, Q6, Q7, Q8, Q9, Q10, Q11, Q12, Q13, Q14, Q15_1, Q15_2, Q15_3, Q18) %>%
+  mutate_if(is.numeric, round, 2) %>%
+  t() %>%
+  kable(caption = "Number of answers (pre snapshot)")
+
+pre_captions %>%
+  kable(caption = "Question codes (pre snapshot)")
+
+pre_snapshot %>%
+  mutate(Q8 = if_any(starts_with("Q8"), ~!is.na(.)),
+         Q9 = if_any(starts_with("Q9"), ~!is.na(.)),
+         Q12 = if_any(starts_with("Q12"), ~!is.na(.)),
+         Q14 = if_any(starts_with("Q14"), ~!is.na(.))) %>%
+  mutate(across(where(is.logical), ~ifelse(. == TRUE, 1, NA))) %>%
+  group_by(City) %>%
+  summarise(across(everything(), ~(1 - mean(is.na(.))) * 100)) %>%
+  select(City, num_range("Q", range = 1:30), Q15_1, Q15_2, Q15_3) %>%
+  select(City, Q6, Q7, Q8, Q9, Q10, Q11, Q12, Q13, Q14, Q15_1, Q15_2, Q15_3, Q18) %>%
+  mutate_if(is.numeric, round, 2) %>%
+  t() %>%
+  kable(caption = "Percentage answered (pre snapshot)")
+
+pre_captions %>%
+  kable(caption = "Question codes (pre snapshot)")
+```
+
+```{r}
+post_snapshot %>%
+  mutate(Q8 = if_any(starts_with("Q8"), ~!is.na(.)),
+         Q9 = if_any(starts_with("Q9"), ~!is.na(.)),
+         Q12 = if_any(starts_with("Q12"), ~!is.na(.)),
+         Q14 = if_any(starts_with("Q14"), ~!is.na(.))) %>%
+  mutate(across(where(is.logical), ~ifelse(. == TRUE, 1, NA))) %>%
+  group_by(City) %>%
+  summarise(across(everything(), ~sum(!is.na(.)))) %>%
+  select(City, num_range("Q", range = 1:30)) %>%
+  haven::as_factor() %>%
+  select(City, Q1, Q2, Q4, Q6, Q8, Q9, Q10, Q12, Q13, Q14) %>%
+  mutate_if(is.numeric, round, 2) %>%
+  t() %>%
+  kable(caption = "Number of answers (post snapshot)")
+
+post_captions %>%
+  filter(!question == "Q7") %>%
+  kable(caption = "Question codes (post snapshot)")
+```
+
+```{r}
+post_snapshot %>%
+  mutate(Q8 = if_any(starts_with("Q8"), ~!is.na(.)),
+         Q9 = if_any(starts_with("Q9"), ~!is.na(.)),
+         Q12 = if_any(starts_with("Q12"), ~!is.na(.)),
+         Q14 = if_any(starts_with("Q14"), ~!is.na(.))) %>%
+  mutate(across(where(is.logical), ~ifelse(. == TRUE, 1, NA))) %>%
+  group_by(City) %>%
+  summarise(across(everything(), ~(1 - mean(is.na(.))) * 100)) %>%
+  select(City, num_range("Q", range = 1:30)) %>%
+  haven::as_factor() %>%
+  select(City, Q1, Q2, Q4, Q6, Q8, Q9, Q10, Q12, Q13, Q14) %>%
+  mutate_if(is.numeric, round, 2) %>%
+  t() %>%
+  kable(caption = "Percentage answered (post snapshot)")
+
+post_captions %>%
+  filter(!question == "Q7") %>%
+  kable(caption = "Question codes (post snapshot)")
+```

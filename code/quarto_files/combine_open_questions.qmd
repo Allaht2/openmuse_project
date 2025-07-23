@@ -1,0 +1,115 @@
+---
+title: "Combining the translated open questions into a single excel file"
+format: pdf
+editor: visual
+---
+
+```{r}
+# Loading libraries
+library(openxlsx)
+library(haven)
+library(dplyr)
+```
+
+```{r}
+# Loading data
+census_data_all <- read_sav("../../input/data_processed/combined_census_data.sav") %>%
+  filter(exclude == 0) %>%
+  mutate(Age_group = case_when(
+          Age < 18 ~ "<18",
+          Age > 17 & Age < 30 ~ "18-29",
+          Age > 29 & Age < 50 ~ "30-49",
+          Age > 49 & Age < 65 ~ "50-64",
+          Age > 64 ~ ">64"
+        ))
+pre_snapshot <- read_sav("../../input/data_processed/pre_snapshot.sav")
+post_snapshot <- read_sav("../../input/data_processed/post_snapshot.sav") %>%
+  rename(City = Q34) %>%
+  mutate(City = haven::as_factor(City))
+translated_audience_Q18 <- unlist(readRDS(
+  file = "../../input/data_processed/translated_questions/audience_Q18.rds"))
+
+translated_pre_Q16 <- unlist(readRDS(
+        file = "../../input/data_processed/translated_questions/pre_Q16.rds"))
+
+translated_pre_Q17 <- unlist(readRDS(
+        file = "../../input/data_processed/translated_questions/pre_Q17.rds"))
+
+translated_post_Q31 <- unlist(readRDS(
+        file = "../../input/data_processed/translated_questions/post_Q31.rds"))
+
+translated_post_Q32 <- unlist(readRDS(
+        file = "../../input/data_processed/translated_questions/post_Q32.rds"))
+```
+
+This document shows how the translated audience files can be compiled into a single excel file.
+
+```{r}
+# Saving results as a single excel file 
+Q18_df <- data.frame(Q18 = translated_audience_Q18)
+Q16_df <- data.frame(Q16 = translated_pre_Q16)
+Q17_df <- data.frame(Q17 = translated_pre_Q17)
+Q31_df <- data.frame(Q31 = translated_post_Q31)
+Q32_df <- data.frame(Q32 = translated_post_Q32)
+
+wb <- createWorkbook()
+addWorksheet(wb, "Q18_audience")
+writeData(wb, "Q18_audience", Q18_df)
+addWorksheet(wb, "Q16_pre_snapshot")
+writeData(wb, "Q16_pre_snapshot", Q16_df)
+addWorksheet(wb, "Q17_pre_snapshot")
+writeData(wb, "Q17_pre_snapshot", Q17_df)
+addWorksheet(wb, "Q31_post_snapshot")
+writeData(wb, "Q31_post_snapshot", Q31_df)
+addWorksheet(wb, "Q32_post_snapshot")
+writeData(wb, "Q32_post_snapshot", Q32_df)
+
+saveWorkbook(wb, file = "../../input/data_processed/translated_questions/translated_open_questions.xlsx", overwrite = TRUE)
+```
+
+```{r}
+# Adding a version with demographic information included
+Q18_df <- census_data_all %>%
+  haven::as_factor() %>%
+  filter(!Q18 == "") %>%
+  select(Q2, Age_group, City) %>%
+  cbind(Q18_df)
+
+Q16_df <- pre_snapshot %>%
+  haven::as_factor()%>%
+  filter(!Q16 == "") %>%
+  select(City) %>%
+  cbind(Q16_df)
+
+Q17_df <- pre_snapshot %>%
+  haven::as_factor()%>%
+  filter(!Q17 == "") %>%
+  select(City) %>%
+  cbind(Q17_df)
+
+Q31_df <- post_snapshot %>%
+  haven::as_factor()%>%
+  filter(!Q31 == "") %>%
+  select(City) %>%
+  cbind(Q31_df)
+
+Q32_df <- post_snapshot %>%
+  haven::as_factor()%>%
+  filter(!Q32 == "") %>%
+  select(City) %>%
+  cbind(Q32_df)
+
+wb <- createWorkbook()
+addWorksheet(wb, "Q18_audience")
+writeData(wb, "Q18_audience", Q18_df)
+addWorksheet(wb, "Q16_pre_snapshot")
+writeData(wb, "Q16_pre_snapshot", Q16_df)
+addWorksheet(wb, "Q17_pre_snapshot")
+writeData(wb, "Q17_pre_snapshot", Q17_df)
+addWorksheet(wb, "Q31_post_snapshot")
+writeData(wb, "Q31_post_snapshot", Q31_df)
+addWorksheet(wb, "Q32_post_snapshot")
+writeData(wb, "Q32_post_snapshot", Q32_df)
+
+saveWorkbook(wb, file = "../../input/data_processed/translated_questions/translated_open_questions_demo.xlsx", overwrite = TRUE)
+```

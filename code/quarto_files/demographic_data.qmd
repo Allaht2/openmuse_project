@@ -1,0 +1,204 @@
+---
+title: "Getting and visualizing demographic data"
+format: pdf
+editor: visual
+---
+
+```{r}
+#| warning: FALSE
+# Loading packages needed
+library(eurostat)
+library(dplyr)
+library(stringr)
+library(haven)
+library(ggplot2)
+```
+
+```{r}
+#| include: FALSE
+options(knitr.kable.max_rows = 6)
+```
+
+## Retrieving demographic data using eurostat
+
+To start let's retrieve NUTS3 data from Europe.
+
+```{r}
+#| warning: FALSE
+# Demographic data from Helsinki, Vilnius, Mannheim and Heidelberg
+eu_population <- get_eurostat("demo_r_pjangrp3", 
+                              filters = list(
+                                geo = c("LT011", "DE126", "DE125", "FI1B1"),
+                                sex = c("F", "M"),
+                                lastTimePeriod = 1),
+                              type = "label") # Retrieve NUTS3 demographic data
+kableExtra::kable(eu_population)
+```
+
+There is not NUTS3 level data available from Ukraine, so we will use data from whole of Ukraine. Also the data from Ukraine is from 2022 as there is no data available from 2023.
+
+```{r}
+#| warning: FALSE
+# Retrieving demographic data for Ukraine
+ua_population <- get_eurostat("demo_pjan",
+                              filters = list(
+                                geo = "UA",
+                                lastTimePeriod = 2),
+                              type = "label")
+kableExtra::kable(ua_population)
+```
+
+```{r}
+#| warning: FALSE
+# Filtering out Unkown and Total from age 
+eu_population <- eu_population %>%
+  filter(!age %in% c("Unknown", "Total", "From 85 to 89 years",
+                     "90 years or over")) %>%
+  na.omit()
+ua_population <- ua_population %>%
+  filter(!age %in% c("Unknown", "Total", "Open-ended age class")) %>%
+  na.omit()
+```
+
+We will now harmonize the variable values between the EU cities and Ukraine data. The mapping data is in the file \`input/other/codebook.xlsx\`. The data will be read from the file and then used to map the variable values.
+
+```{r}
+#| warning: FALSE
+# Matching the factor levels
+mapping_data_eu <- readxl::read_excel(
+  "../../input/other/codebook.xlsx", sheet = 5) %>%
+  filter(dataset == "europe") %>% 
+  select(-dataset)
+# Printing example of the mapping dataset
+kableExtra::kable(mapping_data_eu)
+
+# Remapping the variable values
+for (i in unique(mapping_data_eu$variable)) {
+  eu_population <- eu_population %>%
+      left_join(mapping_data_eu %>%
+                    filter(variable == i), by = setNames("original", i)) %>%
+      mutate(!!sym(i) := coalesce(mapped, !!sym(i))) %>%
+      select(-c(variable, mapped))
+}
+# Removing the extra columns
+eu_population <- eu_population %>%
+  select(-c(time, freq, unit)) %>%
+  group_by(age, sex, geo) %>%
+  summarise(values = sum(values)) %>%
+  na.omit()
+  
+# Matching the factor levels for Ukraine data
+mapping_data_ua <- readxl::read_excel(
+  "../../input/other/codebook.xlsx", sheet = 5) %>%
+  filter(dataset == "ua") %>% 
+  select(-dataset)
+# Remapping the varaible values
+for (i in unique(mapping_data_ua$variable)) {
+  ua_population <- ua_population %>% 
+    left_join(mapping_data_ua %>%
+                    filter(variable == i), by = setNames("original", i)) %>%
+      mutate(!!sym(i) := coalesce(mapped, !!sym(i))) %>%
+      select(-c(variable, mapped))
+}
+# Removing the extra columns
+ua_population <- ua_population %>%
+  select(-time) %>%
+  group_by(age, sex, geo) %>%
+  summarise(values = sum(values)) %>%
+  na.omit() %>%
+  filter(!sex == "Total")
+
+kableExtra::kable(eu_population)
+kableExtra::kable(ua_population)
+```
+
+Now we can join the Ukraine data into the rest of the data. After this we can calculate the proportion of different demographic categories.
+
+```{r}
+#| warning: FALSE
+# Combining Ukraine (Lviv) data with the other cities
+eu_population <- rbind(eu_population, ua_population)
+# Getting counts and proportions for the different demographic categories
+eu_population <-  eu_population %>%
+  group_by(geo) %>%
+  na.omit() %>%
+  mutate(prop = values/sum(values))
+kableExtra::kable(eu_population, max_rows = 5)
+```
+
+```{r}
+# Saving the demographic data
+# saveRDS(eu_population, "eu_population.rds")
+```
+
+## Comparing the census demographic breakdown to the population level one
+
+Let's start by reading the census data.
+
+```{r}
+#| warning: FALSE
+# Reading the census data
+census_data_all <- read_sav("../../input/data_processed/combined_census_data.sav") %>%
+  filter(exclude == 0)
+```
+
+```{r}
+#| warning: FALSE
+# Renaming columns to match
+eu_population <- eu_population %>%
+  rename(City = geo, Age_group = age, Q2 = sex)
+```
+
+Now we can plot comparisons of the demographic distributions in the census vs. the population.
+
+```{r}
+#| warning: FALSE
+#| fig-width: 10
+#| fig-height: 8
+# Comparing age distributions
+census_data_all %>%
+  select(City, Age_group) %>%
+  haven::as_factor() %>%
+  group_by(City, Age_group) %>%
+  count() %>%
+  ungroup() %>%
+  group_by(City) %>%
+  na.omit() %>%
+  mutate(prop = n/sum(n)) %>%
+  ggplot(aes(x = Age_group, y = prop)) +
+  geom_point(aes(color = "Census")) + facet_wrap(vars(City)) +
+  geom_point(data = eu_population %>%
+               group_by(City, Age_group) %>%
+               summarise(prop = sum(prop)),
+             aes(x = Age_group, y = prop, color = "Population")) +
+  scale_color_manual(name = "Dataset",
+                     breaks = c("Census", "Population"),
+                     values = c("Census" = "blue", "Population" = "red")) +
+  labs(x = "Age group", y = "Proportion") + coord_flip()
+```
+
+```{r}
+#| warning: FALSE
+#| fig-width: 10
+#| fig-height: 10
+# Comparing gender distributions
+census_data_all %>%
+  group_by(City, Q2) %>%
+  haven::as_factor() %>%
+  filter(Q2 %in% c("Female", "Male")) %>%
+  count() %>%
+  ungroup() %>%
+  group_by(City) %>%
+  na.omit() %>%
+  mutate(prop = n/sum(n)) %>%
+  ggplot(aes(x = Q2, y = prop)) +
+  geom_point(aes(color = "Census")) + facet_wrap(vars(City)) +
+  geom_point(data = eu_population %>%
+               group_by(City, Q2) %>%
+               summarise(prop = sum(prop)),
+             aes(x = Q2, y = prop, color = "Population")) +
+  scale_color_manual(name = "Dataset",
+                     breaks = c("Census", "Population"),
+                     values = c("Census" = "blue", "Population" = "red")) +
+  labs(x = "Gender", y = "Proportion")
+```

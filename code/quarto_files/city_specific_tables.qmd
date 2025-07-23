@@ -1,0 +1,617 @@
+---
+title: "City specific tables"
+format: pdf
+editor: visual
+execute: 
+  echo: FALSE
+  warning: FALSE
+---
+
+```{r}
+#| output: FALSE
+# Loading packages needed
+library(tidyverse) 
+library(haven)
+library(kableExtra)
+library(janitor)
+```
+
+```{r}
+# Specifying the city for data
+city <- c("Helsinki")
+```
+
+```{r}
+# Loading the data
+census_data_all <- read_sav("../../input/data_processed/combined_census_data.sav") %>%
+  filter(exclude == 0) # Filtering out bad responses
+pre_snapshot <- read_sav("../../input/data_processed/pre_snapshot.sav")
+post_snapshot <- read_sav("../../input/data_processed/post_snapshot.sav")
+# Reading labels 
+census_captions <- readxl::read_excel("../../input/other/codebook.xlsx", sheet = 6)
+pre_captions <- readxl::read_excel("../../input/other/codebook.xlsx", sheet = 7)
+post_captions <- readxl::read_excel("../../input/other/codebook.xlsx", sheet = 8)
+```
+
+## Audience census tables
+
+```{r}
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Age_group, name = "Count") %>%
+    na.omit() %>%
+    filter(City %in% city) %>%
+    arrange(Age_group, City) %>%
+    pivot_wider(id_cols = City, names_from = Age_group, values_from = Count) %>%
+    t() %>%
+    kable(caption = census_captions %>%
+               filter(question == "Age_group") %>%
+               select(caption))
+```
+
+```{r}
+census_data_all %>% 
+  haven::as_factor() %>%
+  count(City, Q2) %>%
+  na.omit() %>%
+  filter(City %in% city) %>%
+  arrange(City) %>%
+  pivot_wider(id_cols = City, names_from = Q2, values_from = n) %>%
+  t() %>%
+  kable(caption = census_captions %>%
+               filter(question == "Q2") %>%
+               select(caption))
+```
+
+```{r}
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Q4) %>%
+    na.omit() %>%
+    filter(City %in% city) %>%
+    arrange(City) %>%
+    pivot_wider(id_cols = City, names_from = Q4, values_from = n) %>%
+    t() %>%
+    kable(caption = census_captions %>%
+               filter(question == "Q4") %>%
+               select(caption))
+```
+
+```{r}
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Q5) %>%
+    na.omit() %>%
+    filter(City %in% city) %>%
+    arrange(City) %>%
+    pivot_wider(id_cols = City, names_from = Q5, values_from = n) %>%
+    t() %>%
+    kable(caption = census_captions %>%
+               filter(question == "Q5") %>%
+               select(caption))
+```
+
+```{r}
+spend_col_names<- c("Ticket/entry" = "Q6_1", "Transportation" = "Q6_2", 
+                     "Food/drink" = "Q6_3", "Merchandise" = "Q6_4", 
+                     "Accommodation" = "Q6_5")
+census_data_all %>%
+  group_by(City) %>%
+  summarise(across(
+    starts_with("Q6"),
+    ~ mean(., na.rm = TRUE),
+    .names = "{.col}"
+  )) %>%
+  filter(City %in% city) %>%
+  rename(all_of(spend_col_names)) %>%
+  mutate_if(is.numeric, round, 2) %>%
+  t() %>%
+  kable(caption = census_captions %>%
+               filter(question == "Q6_spec") %>%
+               select(caption),
+        digits = 2)
+```
+
+```{r}
+census_data_all %>%
+  group_by(City) %>%
+  summarise(across(
+    starts_with("Q6"),
+    ~ mean(mean(.[.>0], na.rm = TRUE)),
+    .names = "{.col}"
+  )) %>%
+  filter(City %in% city) %>%
+  rename(all_of(spend_col_names)) %>%
+  mutate_if(is.numeric, round, 2) %>%
+  t() %>%
+  kable(caption = census_captions %>%
+               filter(question == "Q6_spec_exc") %>%
+               select(caption),
+        digits = 2)
+```
+
+```{r}
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Q7) %>%
+    na.omit() %>%
+    filter(City %in% city) %>%
+    arrange(City) %>%
+    pivot_wider(id_cols = City, names_from = Q7, values_from = n) %>%
+    t() %>%
+    kable(caption = census_captions %>%
+               filter(question == "Q7") %>%
+               select(caption))
+```
+
+```{r}
+census_data_all %>%
+  select(starts_with("Q8"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  count(City, value) %>%
+  filter(City %in% city) %>%
+  arrange(City) %>%
+  pivot_wider(id_cols = City, names_from = value, values_from = n) %>%
+  t() %>%
+  kable(caption = census_captions %>%
+               filter(question == "Q8") %>%
+               select(caption))
+```
+
+```{r}
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Q9) %>%
+    na.omit() %>%
+    arrange(City) %>%
+    filter(City %in% city) %>%
+    pivot_wider(id_cols = City, names_from = Q9, values_from = n) %>%
+    t() %>%
+    kable(caption = census_captions %>%
+               filter(question == "Q9") %>%
+               select(caption))
+```
+
+```{r}
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Q11) %>%
+    na.omit() %>%
+    filter(City %in% city) %>%
+    arrange(City) %>%
+    pivot_wider(id_cols = City, names_from = Q11, values_from = n) %>%
+    t() %>%
+    kable(caption = census_captions %>%
+               filter(question == "Q11") %>%
+               select(caption))
+```
+
+```{r}
+census_data_all %>%
+  select(starts_with("Q12"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  count(City, value, name = "Count") %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = value, values_from = Count) %>%
+  t() %>%
+  kable(caption = census_captions %>%
+               filter(question == "Q12") %>%
+               select(caption))
+```
+
+```{r}
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Q13) %>%
+    na.omit() %>%
+    arrange(City) %>%
+    filter(City %in% city) %>%
+    pivot_wider(id_cols = City, names_from = Q13, values_from = n) %>%
+    t() %>%
+    kable(caption = census_captions %>%
+               filter(question == "Q13") %>%
+               select(caption))
+```
+
+```{r}
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Q14) %>%
+    na.omit() %>%
+    arrange(City) %>%
+    filter(City %in% city) %>%
+    pivot_wider(id_cols = City, names_from = Q14, values_from = n) %>%
+    t() %>%
+    kable(caption = census_captions %>%
+               filter(question == "Q14") %>%
+               select(caption))
+```
+
+```{r}
+census_data_all %>%
+  select(starts_with("Q15"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  count(City, value) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = value, values_from = n) %>%
+  t() %>%
+  kable(caption = census_captions %>%
+               filter(question == "Q15") %>%
+               select(caption))
+```
+
+```{r}
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Q16) %>%
+    na.omit() %>%
+    arrange(City) %>%
+    filter(City %in% city) %>%
+    pivot_wider(id_cols = City, names_from = Q16, values_from = n) %>%
+    t() %>%
+    kable(caption = census_captions %>%
+               filter(question == "Q16") %>%
+               select(caption))
+```
+
+```{r}
+census_data_all %>%
+  select(starts_with("Q17"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  count(City, value) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = value, values_from = n) %>%
+  t() %>%
+  kable(caption = census_captions %>%
+               filter(question == "Q17") %>%
+               select(caption))
+```
+
+## Pre-snapshot venue survey tables
+
+```{r}
+pre_snapshot %>%
+  haven::as_factor() %>%
+  count(City, Q6) %>%
+  na.omit() %>%
+  arrange(City) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = Q6, values_from = n) %>%
+  t() %>%
+  kable(caption = pre_captions %>%
+               filter(question == "Q6") %>%
+               select(caption))
+```
+
+```{r}
+pre_snapshot %>%
+  haven::as_factor() %>%
+  select(City, Q7) %>%
+  na.omit() %>%
+  mutate(YearBracket = paste0(floor(Q7 / 10) * 10, "-", floor(Q7 / 10) * 10 + 9)) %>%
+  count(City, YearBracket) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = YearBracket, values_from = n) %>%
+  t() %>%
+  kable(caption = pre_captions %>%
+               filter(question == "Q7") %>%
+               select(caption))
+```
+
+```{r}
+pre_snapshot %>%
+  select(starts_with("Q8"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  count(City, value) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = value, values_from = n) %>%
+  t() %>%
+  kable(caption = pre_captions %>%
+               filter(question == "Q8") %>%
+               select(caption))
+```
+
+```{r}
+pre_snapshot %>%
+  select(starts_with("Q9"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  count(City, value) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = value, values_from = n) %>%
+  t() %>%
+  kable(caption = pre_captions %>%
+               filter(question == "Q9") %>%
+               select(caption))
+```
+
+```{r}
+pre_snapshot %>%
+  haven::as_factor() %>%
+  count(City, Q10) %>%
+  na.omit() %>%
+  arrange(City) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = Q10, values_from = n) %>%
+  t() %>%
+  kable(caption = pre_captions %>%
+               filter(question == "Q10") %>%
+               select(caption))
+```
+
+```{r}
+pre_snapshot %>%
+  haven::as_factor() %>%
+  count(City, Q11) %>%
+  na.omit() %>%
+  arrange(City) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = Q11, values_from = n) %>%
+  t() %>%
+  kable(caption = pre_captions %>%
+               filter(question == "Q11") %>%
+               select(caption))
+```
+
+```{r}
+pre_snapshot %>%
+  select(starts_with("Q12"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  count(City, value) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = value, values_from = n) %>%
+  t() %>%
+  kable(caption = pre_captions %>%
+               filter(question == "Q12") %>%
+               select(caption))
+```
+
+```{r}
+pre_snapshot %>%
+  haven::as_factor() %>%
+  count(City, Q13) %>%
+  na.omit() %>%
+  arrange(City) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = Q13, values_from = n) %>%
+  t() %>%
+  kable(caption = pre_captions %>%
+               filter(question == "Q13") %>%
+               select(caption))
+```
+
+```{r}
+pre_snapshot %>%
+  select(starts_with("Q14"), City) %>%
+  select(-Q14_15_TEXT) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  count(City, value) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = value, values_from = n) %>%
+  t() %>%
+  kable(caption = pre_captions %>%
+               filter(question == "Q14") %>%
+               select(caption))
+```
+
+```{r}
+pre_snapshot %>%
+  haven::as_factor() %>%
+  count(City, Q15_1) %>%
+  na.omit() %>%
+  arrange(City) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = Q15_1, values_from = n) %>%
+  t() %>%
+  kable(caption = pre_captions %>%
+               filter(question == "Q15_1") %>%
+               select(caption))
+```
+
+```{r}
+pre_snapshot %>%
+  haven::as_factor() %>%
+  count(City, Q15_2) %>%
+  na.omit() %>%
+  arrange(City) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = Q15_2, values_from = n) %>%
+  t() %>%
+  kable(caption = pre_captions %>%
+               filter(question == "Q15_2") %>%
+               select(caption))
+```
+
+```{r}
+pre_snapshot %>%
+  haven::as_factor() %>%
+  count(City, Q15_3) %>%
+  na.omit() %>%
+  arrange(City) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = Q15_3, values_from = n) %>%
+  t() %>%
+  kable(caption = pre_captions %>%
+               filter(question == "15_3") %>%
+               select(caption))
+```
+
+```{r}
+pre_snapshot %>%
+  haven::as_factor() %>%
+  count(City, Q18) %>%
+  na.omit() %>%
+  arrange(City) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = Q18, values_from = n) %>%
+  t() %>%
+  kable(caption = pre_captions %>%
+               filter(question == "Q18") %>%
+               select(caption))
+```
+
+## Post-snapshot venue survey tables
+
+```{r}
+post_snapshot <- post_snapshot %>%
+  rename(City = Q34)
+```
+
+```{r}
+post_snapshot %>%
+  haven::as_factor() %>%
+  count(City, Q1) %>%
+  na.omit() %>%
+  arrange(City) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = Q1, values_from = n) %>%
+  t() %>%
+  kable(caption = post_captions %>%
+               filter(question == "Q1") %>%
+               select(caption))
+```
+
+```{r}
+post_snapshot %>%
+  haven::as_factor() %>%
+  count(City, Q2) %>%
+  na.omit() %>%
+  arrange(City) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = Q2, values_from = n) %>%
+  t() %>%
+  kable(caption = post_captions %>%
+               filter(question == "Q2") %>%
+               select(caption))
+```
+
+```{r}
+post_snapshot %>%
+  haven::as_factor() %>%
+  count(City, Q4) %>%
+  na.omit() %>%
+  arrange(City) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = Q4, values_from = n) %>%
+  t() %>%
+  kable(caption = post_captions %>%
+               filter(question == "Q4") %>%
+               select(caption))
+```
+
+```{r}
+post_snapshot %>%
+  haven::as_factor() %>%
+  count(City, Q6) %>%
+  na.omit() %>%
+  arrange(City) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = Q6, values_from = n) %>%
+  t() %>%
+  kable(caption = post_captions %>%
+               filter(question == "Q6") %>%
+               select(caption))
+```
+
+```{r}
+post_snapshot %>%
+  select(starts_with("Q8"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  count(City, value) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = value, values_from = n) %>%
+  t() %>%
+  kable(caption = post_captions %>%
+               filter(question == "Q8") %>%
+               select(caption))
+```
+
+```{r}
+post_snapshot %>%
+  select(starts_with("Q9"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  count(City, value) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = value, values_from = n) %>%
+  t() %>%
+  kable(caption = post_captions %>%
+               filter(question == "Q9") %>%
+               select(caption))
+```
+
+```{r}
+post_snapshot %>%
+  haven::as_factor() %>%
+  count(City, Q10) %>%
+  na.omit() %>%
+  arrange(City) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = Q10, values_from = n) %>%
+  t() %>%
+  kable(caption = post_captions %>%
+               filter(question == "Q10") %>%
+               select(caption))
+```
+
+```{r}
+post_snapshot %>%
+  select(starts_with("Q12"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  count(City, value) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = value, values_from = n) %>%
+  t() %>%
+  kable(caption = post_captions %>%
+               filter(question == "Q12") %>%
+               select(caption))
+```
+
+```{r}
+post_snapshot %>%
+  haven::as_factor() %>%
+  count(City, Q13) %>%
+  na.omit() %>%
+  arrange(City) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = Q13, values_from = n) %>%
+  t() %>%
+  kable(caption = post_captions %>%
+               filter(question == "Q13") %>%
+               select(caption))
+```
+
+```{r}
+post_snapshot %>%
+  select(starts_with("Q14"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  count(City, value) %>%
+  filter(City %in% city) %>%
+  pivot_wider(id_cols = City, names_from = value, values_from = n) %>%
+  t() %>%
+  kable(caption = post_captions %>%
+               filter(question == "Q14") %>%
+               select(caption))
+```

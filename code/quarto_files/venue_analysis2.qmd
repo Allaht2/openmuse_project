@@ -1,0 +1,442 @@
+---
+title: "Venue snapshot analysis"
+format: 
+  pdf: 
+    fig-width: 7
+    fig-height: 7
+editor: visual
+execute:
+  echo: FALSE
+  warning: FALSE
+---
+
+```{r}
+# Loading packages
+library(dplyr)
+library(readxl)
+library(ggplot2)
+library(ggrepel)
+library(tibble)
+library(tidyr)
+library(labelled)
+library(stringr)
+```
+
+```{r}
+# Reading xlsx files and adding labels
+pre_labels <- readxl::read_excel(
+  "../../input/data_raw/venue_data/Pre-Snapshot+Venue+Survey_November+11,+2024_13.45.xlsx",
+  n_max = 1) %>%
+    pivot_longer(everything()) %>% deframe()
+
+pre_snapshot <- readxl::read_excel(
+  "../../input/data_raw/venue_data/Pre-Snapshot+Venue+Survey_November+11,+2024_13.45.xlsx",
+  skip = 2, col_names = names(pre_labels))
+var_label(pre_snapshot) <- pre_labels
+
+post_labels <- readxl::read_excel(
+  "../../input/data_raw/venue_data/Post-snapshot+Venue+Survey_November+11,+2024_13.44.xlsx",
+  n_max = 1) %>%
+    pivot_longer(everything()) %>% deframe()
+post_snapshot <- readxl::read_excel(
+  "../../input/data_raw/venue_data/Post-snapshot+Venue+Survey_November+11,+2024_13.44.xlsx",
+  skip = 2, col_names = names(post_labels))
+var_label(post_snapshot) <- post_labels
+
+
+# Removing test answers
+pre_snapshot <- pre_snapshot %>%
+  filter(Status == "IP Address", !grepl("test", Q21_1),
+         !Q21_1 %in% c("c", "x", "f", "asdads", "moi", "Testclub", "-", "bn"))
+post_snapshot <- post_snapshot %>%
+  filter(Status == "IP Address", !grepl("test", Q30_1),
+         !Q30_1 %in% c("a", "Testplace", "asdsadas", "cdcd", "Chalmuns Cantina",
+                       "d", "sasda", "rm", "Тест"))
+```
+
+## Pre-snapshot venue survey analysis
+
+```{r}
+# Legal status
+pre_snapshot %>%
+  count(Q4) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(x = "", y = n, fill = Q4)) + geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) + theme_void() + scale_fill_brewer() +
+  labs(title = "Legal status of the venue") +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+            position = position_stack(vjust = 0.5)) 
+```
+
+```{r}
+# Arrengement for the premises
+pre_snapshot %>%
+  count(Q6) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(x = "", y = n, fill = Q6)) + geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) + theme_void() + scale_fill_brewer() +
+  labs(title = "Under what arrangement do you use the current premises?") +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+            position = position_stack(vjust = 0.5)) 
+```
+
+```{r}
+# Year of establishment
+pre_snapshot %>%
+    ggplot(aes(x = Q7)) + geom_histogram() + 
+    labs(title = "The year the venue started operating", x = "Year") +
+    scale_x_continuous(breaks = seq(1925, 2025, 10), lim = c(1925, 2025)) +
+    scale_y_continuous(breaks = seq(0, 10, 2), lim = c(0,10))
+```
+
+```{r}
+# What days the venue is open
+pre_snapshot %>%
+  mutate(days_split = str_split(Q8, ",")) %>%
+  unnest(days_split) %>%
+  count(days_split) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  mutate(days_split = factor(days_split, levels = c(
+    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday", "Everyday"
+  ))) %>%
+  ggplot(aes(y = days_split, x = n)) + 
+  geom_bar(stat = "identity", fill = "lightblue") +
+  labs(x = "Count", y = "Weekday",
+       title = "What days is your venue open?") +
+  scale_y_discrete(labels = scales::label_wrap(50)) +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+                  hjust = -0.2) 
+```
+
+```{r}
+# What months is the venue open?
+pre_snapshot %>%
+  mutate(months_split = str_split(Q9, ",")) %>%
+  unnest(months_split) %>%
+  count(months_split) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  mutate(months_split = factor(months_split, levels = c(
+    "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December", "All year round"
+  ))) %>%
+  ggplot(aes(y = months_split, x = n)) + 
+  geom_bar(stat = "identity", fill = "lightblue") +
+  labs(x = "Count", y = "Month",
+       title = "What months is your venue open?") +
+  scale_y_discrete(labels = scales::label_wrap(50)) +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+                  hjust = -0.2) 
+```
+
+```{r}
+# How would you descripe the venue
+pre_snapshot %>%
+    count(Q10) %>%
+    na.omit() %>% 
+    mutate(percentage = n / sum(n) * 100) %>%
+    ggplot(aes(y = Q10, x = n)) + geom_bar(stat = "identity", fill = "lightblue") +
+    labs(x = "Count", y = "Description",
+         title = "How would you best describe the venue?") +
+    scale_y_discrete(labels = scales::label_wrap(50)) +
+    geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+                    hjust = -0.2) 
+```
+
+```{r}
+# Venue capacity
+pre_snapshot %>%
+    count(Q11) %>%
+    na.omit() %>% 
+    mutate(percentage = n / sum(n) * 100) %>%
+    ggplot(aes(y = Q11, x = n)) + geom_bar(stat = "identity", fill = "lightblue") +
+    labs(x = "Count", y = "Capacity",
+         title = "Venue aproximate capacity") +
+    scale_y_discrete(labels = scales::label_wrap(50)) +
+    geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+                    hjust = -0.2) 
+```
+
+```{r}
+# Venue activities 
+pre_snapshot %>%
+  mutate(activities_split = str_split(Q12, ",(?![^()]*\\))")) %>%
+  unnest(activities_split) %>%
+  count(activities_split) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(y = activities_split, x = n)) + 
+  geom_bar(stat = "identity", fill = "lightblue") +
+  labs(x = "Count", y = "Offering",
+       title = "What does your venue offer?") +
+  scale_y_discrete(labels = scales::label_wrap(50)) +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+                  hjust = -0.2) 
+```
+
+```{r}
+# Will you hold a live music
+pre_snapshot %>%
+  count(Q13) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(x = "", y = n, fill = Q13)) + geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) + theme_void() + scale_fill_brewer() +
+  labs(title = "Will your venue hold live music event on 11.10?") +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+            position = position_stack(vjust = 0.5)) 
+```
+
+```{r}
+# Is your venue negatively affected by the following
+pre_snapshot %>%
+  mutate(neg_split = str_split(Q14, ",")) %>%
+  unnest(neg_split) %>%
+  count(neg_split) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(y = neg_split, x = n)) + 
+  geom_bar(stat = "identity", fill = "lightblue") +
+  labs(x = "Count", y = "Reason",
+       title = "What is your venue negatively \naffected by?") +
+  scale_y_discrete(labels = scales::label_wrap(50)) +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+                  hjust = -0.2) 
+```
+
+```{r}
+# Enviromentally friendly
+pre_snapshot %>%
+  count(Q15_1) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(x = "", y = n, fill = Q15_1)) + geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) + theme_void() + scale_fill_brewer() +
+  labs(title = "Venues have responsibility to become more \nenviriomentaly friendly") +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+            position = position_stack(vjust = 0.5))
+```
+
+```{r}
+# Discrimination
+pre_snapshot %>%
+  count(Q15_2) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(x = "", y = n, fill = Q15_2)) + geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) + theme_void() + scale_fill_brewer() +
+  labs(title = "The live music scene has discrimination problem") +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+            position = position_stack(vjust = 0.5))
+```
+
+```{r}
+# Discrimination
+pre_snapshot %>%
+  count(Q15_3) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(x = "", y = n, fill = Q15_3)) + geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) + theme_void() + scale_fill_brewer() +
+  labs(title = "The live music scene has corruption problem") +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+            position = position_stack(vjust = 0.5))
+```
+
+```{r}
+# Optimism
+pre_snapshot %>%
+  count(Q18) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(x = "", y = n, fill = Q18)) + geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) + theme_void() + scale_fill_brewer() +
+  labs(title = "Are you optimistic about the future of your venue?") +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+            position = position_stack(vjust = 0.5))
+```
+
+## Post-snapshot venue survey analysis
+
+```{r}
+# Venue location
+post_snapshot %>%
+  count(Q34) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(x = "", y = n, fill = Q34)) + geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) + theme_void() + scale_fill_brewer() +
+  labs(title = "Venue location") +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+            position = position_stack(vjust = 0.5))
+```
+
+```{r}
+# Did you host live music event 
+post_snapshot %>%
+  count(Q1) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(x = "", y = n, fill = Q1)) + geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) + theme_void() + scale_fill_brewer() +
+  labs(title = "Did you host a live music event on Friday, 11 October?") +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+            position = position_stack(vjust = 0.5))
+```
+
+```{r}
+# How many live music events did you host
+post_snapshot %>%
+  count(Q2) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(x = "", y = n, fill = Q2)) + geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) + theme_void() + scale_fill_brewer() +
+  labs(title = "How many events did your venue host?") +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+            position = position_stack(vjust = 0.5))
+```
+
+```{r}
+# Average how many days stage live music
+post_snapshot %>%
+  count(Q4) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(x = "", y = n, fill = Q4)) + geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) + theme_void() + scale_fill_brewer() +
+  labs(title = "On average, how many days you stage live music per week?") +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+            position = position_stack(vjust = 0.5))
+```
+
+```{r}
+# Attendance compared to before COVID
+post_snapshot %>%
+  count(Q6) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(x = "", y = n, fill = Q6)) + geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) + theme_void() + scale_fill_brewer() +
+  labs(title = "How is you attendance compared to the period \nbefore COVID?") +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+            position = position_stack(vjust = 0.5))
+```
+
+```{r}
+# Before full-scale Russian assault
+post_snapshot %>%
+  filter(Q34 == "Lviv") %>%
+  count(Q7) %>%
+  na.omit() %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(x = "", y = n, fill = Q7)) + geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) + theme_void() + scale_fill_brewer() +
+  labs(title = "How is you attendance compared to the period before \nfull-scale Russian assault (Lviv data)?") +
+  geom_text_repel(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+            position = position_stack(vjust = 0.5))
+```
+
+```{r}
+# What kinds of live music genre most often present
+post_snapshot %>%
+    mutate(genre_split = str_split(Q8, ",")) %>%
+    unnest(genre_split) %>%
+    count(genre_split, Q34) %>%
+    na.omit() %>%
+    mutate(percentage = n / sum(n) * 100) %>%
+    ggplot(aes(y = genre_split, x = n)) + 
+    geom_bar(stat = "identity", fill = "lightblue") +
+    labs(x = "Count", y = "Genre",
+         title = "What kinds of live music \ngenre you most often present?") +
+    scale_y_discrete(labels = scales::label_wrap(50)) + facet_wrap(vars(Q34))
+```
+
+```{r}
+# Event entrance
+post_snapshot %>%
+    mutate(genre_split = str_split(Q9, ",")) %>%
+    unnest(genre_split) %>%
+    count(genre_split, Q34) %>%
+    na.omit() %>%
+    mutate(percentage = n / sum(n) * 100) %>%
+    ggplot(aes(y = genre_split, x = n)) + 
+    geom_bar(stat = "identity", fill = "lightblue") +
+    labs(x = "Count", y = "Type",
+         title = "Do you present live music events where the entrance is?") +
+    scale_y_discrete(labels = scales::label_wrap(50)) + facet_wrap(vars(Q34)) +
+    scale_x_continuous(breaks = seq(0,13,2))
+```
+
+```{r}
+# Event organizers
+post_snapshot %>%
+    count(Q10, Q34) %>%
+    na.omit() %>%
+    mutate(percentage = n / sum(n) * 100) %>%
+    ggplot(aes(y = Q10, x = n)) + 
+    geom_bar(stat = "identity", fill = "lightblue") +
+    labs(x = "Count", y = "Organizer",
+         title = "Who organizes the events at the venue?") +
+    scale_y_discrete(labels = scales::label_wrap(50)) + facet_wrap(vars(Q34)) +
+    scale_x_continuous(breaks = seq(0,13,2))
+```
+
+```{r}
+# How do you pay the performers
+post_snapshot %>%
+    mutate(pay_split = str_split(Q12, ",(?![^()]*\\))")) %>%
+    unnest(pay_split) %>%
+    count(pay_split, Q34) %>%
+    na.omit() %>%
+    mutate(percentage = n / sum(n) * 100) %>%
+    ggplot(aes(y = pay_split, x = n)) + 
+    geom_bar(stat = "identity", fill = "lightblue") +
+    labs(x = "Count", y = "Pay type",
+         title = "How do you pay performers?") +
+    scale_y_discrete(labels = scales::label_wrap(50)) + facet_wrap(vars(Q34))+
+    scale_x_continuous(breaks = seq(0,13,2))
+```
+
+```{r}
+# Music festivals
+post_snapshot %>%
+    count(Q13, Q34) %>%
+    na.omit() %>%
+    mutate(percentage = n / sum(n) * 100) %>%
+    ggplot(aes(y = Q13, x = n)) + 
+    geom_bar(stat = "identity", fill = "lightblue") +
+    labs(x = "Count", y = "Answer",
+         title = "Do you host music festivals?") +
+    scale_y_discrete(labels = scales::label_wrap(50)) + facet_wrap(vars(Q34)) +
+    scale_x_continuous(breaks = seq(0,13,2))
+```
+
+```{r}
+# Staff composition
+post_snapshot %>%
+    mutate(staff_split = str_split(Q14, ",(?![^()]*\\))")) %>%
+    unnest(staff_split) %>%
+    count(staff_split, Q34) %>%
+    na.omit() %>%
+    mutate(percentage = n / sum(n) * 100) %>%
+    ggplot(aes(y = staff_split, x = n)) + 
+    geom_bar(stat = "identity", fill = "lightblue") +
+    labs(x = "Count", y = "Staff type",
+         title = "Is your staff composed of?") +
+    scale_y_discrete(labels = scales::label_wrap(50)) + facet_wrap(vars(Q34))+
+    scale_x_continuous(breaks = seq(0,13,2))
+```
+
+```{r}
+# Total anual revenue
+# options(scipen = 999)
+# post_snapshot %>%
+#   select(Q34, Q25) %>%
+#   filter(Q34 == "Helsinki") %>%
+#   na.omit() %>%
+#   ggplot(aes(x = Q25)) + geom_histogram() + facet_wrap(vars(Q34)) +
+#   labs(title = "Total anual revenue")
+```

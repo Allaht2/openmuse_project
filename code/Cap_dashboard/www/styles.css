@@ -1,0 +1,57 @@
+/* Set the font for the entire dashboard */
+body {
+  font-family: 'Roboto', sans-serif;
+  background-color: #fff;
+  color: #333;
+}
+
+h {
+  color: #253471 !important;
+  font-weight: 500 !important;
+  padding-bottom: 20px;
+  padding-top: 20px;
+  font-size: 28px !important;/* Semibold */
+}
+
+
+
+/* Style card headers */
+.card-header {
+  background-color: #F4F4F4 !important;
+  color: #253471 !important;
+  font-weight: bold;
+}
+
+/* Customize dropdowns (pickerInput) */
+.picker-input {
+  font-size: 16px !important;
+  color: #333 !important;
+}
+
+/* Style tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 10px;
+  border: 1px solid #ddd;
+}
+
+th {
+  background-color: #007BFF;
+  color: white;
+}
+
+h2 {
+  font-size: 24px !important;
+  font-weight: 600 !important; /* Semi-bold */
+  color: #253471 !important;
+}
+
+.legend text {
+  font-size: 16px !important;
+}
+
+

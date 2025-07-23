@@ -1,0 +1,192 @@
+---
+title: "Machine translating open questions"
+format: pdf
+editor: visual
+---
+
+This document goes over how the live music census questions can be machine translated.
+
+```{r}
+# Libraries need
+library(haven)
+library(tidyr)
+library(dplyr)
+library(deeplr)
+```
+
+```{r}
+# Loading the data
+census_data_all <- read_sav("../../input/data_processed/combined_census_data.sav") %>%
+  filter(exclude == 0)
+pre_snapshot <- read_sav("../../input/data_processed/pre_snapshot.sav")
+post_snapshot <- read_sav("../../input/data_processed/post_snapshot.sav")
+```
+
+## Translating questions
+
+There are a few open questions in the live music census surveys. The audience survey has one open question "Why do you think a healthy live music scene is important?". The pre census venue survey has two open questions "What should the government do to help the live music industry in your city?" and "What do you think are the main contributions that your live music venue makes to your local area?" The post snapshot venue survey has open questions, one about attendances compared to before COVID and another about attendances compared to before Russian assault on Ukraine (only for Lviv data).
+
+### Audience survey
+
+Let's take a look at the open question.
+
+```{r}
+census_data_all %>% 
+  filter(!Q18 == "") %>%
+  select(Q18)
+```
+
+We can that the first few answers are mainly in Finnish. The answers can be machine translated using `translate2()` function form `deeplr` package. To be able to use the package and the function you need to have a deepl account. After creating the account you get an API key that is used by R. For more information check out the package [GitHub page](https://github.com/zumbov2/deeplr).
+
+Now we can translate the answers.
+
+```{r}
+# Getting the open question data as a vector
+audience_Q18 <- census_data_all %>%
+  filter(!Q18 == "") %>%
+  pull(Q18)
+# Splitting the answers to avoid problems with API
+audience_Q18_split <- split(audience_Q18, ceiling(seq_along(audience_Q18)/5))
+# Translating the question
+# translated_audience_Q18 <- sapply(audience_Q18_split, function(x) {
+#   Sys.sleep(3)
+#   translate2(x, target_lang = "EN", auth_key = Sys.getenv("DEEPL_API_KEY"))
+#   })
+results <- vector("list", length(audience_Q18_split))
+errors <- list()
+for (i in seq_along(audience_Q18_split)) {
+  Sys.sleep(3)  # Throttle API requests
+
+  tryCatch({
+    results[[i]] <- translate2(
+      audience_Q18_split[[i]],
+      target_lang = "EN",
+      auth_key = Sys.getenv("DEEPL_API_KEY")
+    )
+  }, error = function(e) {
+    errors[[as.character(i)]] <- e$message
+    results[[i]] <- NA  # Optional: Fill failed slots with NA
+  })
+}
+# Combine into one vector
+translated_audience_Q18 <- unlist(results)
+```
+
+In the function above the function parameter `target_lang` determines the target language, English here. Parameter `auth_key` is used to determine the API key. After running the translation we can take a look at the translated answers.
+
+```{r}
+head(translated_audience_Q18)
+```
+
+Now the answers are in English.
+
+### Pre snapshot
+
+The pre snapshot venue survey had two open questions. They can be translated in similar fashion to the previous one. Let's take a look at the questions.
+
+```{r}
+pre_snapshot %>% 
+  filter(!Q16 == "") %>%
+  select(Q16)
+
+pre_snapshot %>% 
+  filter(!Q17 == "") %>%
+  select(Q17)
+```
+
+Again, translating the questions.
+
+```{r}
+# What should goverment do
+pre_Q16 <- pre_snapshot %>%
+  filter(!Q16 == "") %>%
+  pull(Q16)
+
+pre_Q16_split <- split(pre_Q16, ceiling(seq_along(pre_Q16)/10))
+translated_pre_Q16 <- sapply(pre_Q16_split, function(x) {
+  Sys.sleep(3)
+  translate2(x, target_lang = "EN", auth_key = Sys.getenv("DEEPL_API_KEY"))
+  })
+
+# What do you contribute
+pre_Q17 <- pre_snapshot %>%
+  filter(!Q17 == "") %>%
+  pull(Q17)
+
+pre_Q17_split <- split(pre_Q17, ceiling(seq_along(pre_Q17)/10))
+translated_pre_Q17 <- sapply(pre_Q17_split, function(x) {
+  Sys.sleep(3)
+  translate2(x, target_lang = "EN", auth_key = Sys.getenv("DEEPL_API_KEY"))
+  })
+```
+
+A look at the translated questions.
+
+```{r}
+# Translated answers
+translated_pre_Q16
+translated_pre_Q17
+```
+
+Again answers are in English.
+
+### Post snapshot
+
+Lastly there are the open questions in the post snapshot survey.
+
+```{r}
+post_snapshot %>% 
+  filter(!Q31 == "") %>%
+  select(Q32)
+
+post_snapshot %>% 
+  filter(!Q32 == "") %>%
+  select(Q32)
+```
+
+```{r}
+# Attendance compared to before COVID
+post_Q31 <- post_snapshot %>%
+  filter(!Q31 == "") %>%
+  pull(Q31)
+post_Q31_split <- split(post_Q31, ceiling(seq_along(post_Q31)/10))
+translated_post_Q31 <- sapply(post_Q31_split, function(x) {
+  Sys.sleep(3)
+  translate2(x, target_lang = "EN", auth_key = Sys.getenv("DEEPL_API_KEY"))
+  })
+
+# Attendance compared to before Russian assault (Lviv data)
+post_Q32 <- post_snapshot %>%
+  filter(!Q32 == "") %>%
+  pull(Q32)
+translated_post_Q32  <- translate2(post_Q32, target_lang = "EN",
+                             auth_key = Sys.getenv("DEEPL_API_KEY"))
+```
+
+```{r}
+# Translated answers
+translated_post_Q31
+translated_post_Q32
+```
+
+### Saving results
+
+To end let's save the results.
+
+```{r}
+# Saving results
+saveRDS(translated_audience_Q18,
+        file = "../../input/data_processed/translated_questions/audience_Q18.rds")
+
+saveRDS(translated_pre_Q16,
+        file = "../../input/data_processed/translated_questions/pre_Q16.rds")
+
+saveRDS(translated_pre_Q17,
+        file = "../../input/data_processed/translated_questions/pre_Q17.rds")
+
+saveRDS(translated_post_Q31,
+        file = "../../input/data_processed/translated_questions/post_Q31.rds")
+
+saveRDS(translated_post_Q32,
+        file = "../../input/data_processed/translated_questions/post_Q32.rds")
+```

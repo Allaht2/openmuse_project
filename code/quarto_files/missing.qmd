@@ -1,0 +1,276 @@
+---
+title: "Answer counts and percentages"
+format: pdf
+editor: visual
+execute: 
+  echo: false
+  warning: false
+---
+
+```{r}
+#| output: FALSE
+# Loading packages needed
+library(tidyverse) 
+library(haven)
+library(kableExtra)
+library(janitor)
+library(glue)
+```
+
+This document has the answer counts and percentages for the questions from the audience survey and both of the venue surveys.
+
+```{r}
+# Loading data
+census_data_all <- read_sav("../../input/data_processed/combined_census_data.sav") %>%
+  filter(exclude == 0)
+pre_snapshot <- read_sav("../../input/data_processed/pre_snapshot.sav")
+post_snapshot <- read_sav("../../input/data_processed/post_snapshot.sav") %>%
+  rename(City = Q34) %>%
+  mutate(City = haven::as_factor(City))
+# Captions
+census_captions <- readxl::read_excel("../../input/other/codebook.xlsx", sheet = 6)
+pre_captions <- readxl::read_excel("../../input/other/codebook.xlsx", sheet = 7)
+post_captions <- readxl::read_excel("../../input/other/codebook.xlsx", sheet = 8)
+```
+
+#### Audience census
+
+```{r}
+answer_summary <- census_data_all %>%
+  mutate(Q6 = if_any(starts_with("Q6"), ~!is.na(.)),
+         Q8 = if_any(starts_with("Q8"), ~!is.na(.)),
+         Q12 = if_any(starts_with("Q12"), ~!is.na(.)),
+         Q15 = if_any(starts_with("Q15"), ~!is.na(.)),
+         Q17 = if_any(starts_with("Q17"), ~!is.na(.)),
+         Q18 = if_else(Q18 != "", TRUE, NA)) %>% 
+  mutate(across(where(is.logical), ~ifelse(. == TRUE, 1, NA))) %>% 
+  select(City, num_range("Q", 1:30)) %>%
+  select(!c(Q10, Q19, Q21)) %>% 
+  group_by(City) %>%
+  summarise(across(everything(),
+                   list(perc = ~ (1 - mean(is.na(.))) * 100,
+                        count = ~ sum(!is.na(.))),
+                   .names = "{.col}_{.fn}")) %>%
+  ungroup()
+
+answer_long <- answer_summary %>%
+  pivot_longer(
+    cols = -City,
+    names_to = c("Question", ".value"),
+    names_sep = "_"
+  ) %>%
+  pivot_wider(
+    names_from = City,
+    values_from = c(count, perc),
+    names_glue = "{City}_{.value}"
+  )
+
+names(answer_long) <- names(answer_long) %>%
+  stringr::str_replace("_count$", "_n") %>%
+  stringr::str_replace("_perc$", "_%")
+
+city_names <- unique(census_data_all$City)
+interleaved_cols <- c("Question", purrr::map(city_names,
+                                             ~ c(glue("{.x}_n"), glue("{.x}_%"))) %>%
+                        unlist())
+
+sample_sizes <- census_data_all %>%
+  group_by(City) %>%
+  summarise(SampleSize = n())
+
+sample_row <- purrr::map_dfc(city_names, function(city) {
+  tibble(
+    !!glue("{city}_n") := sample_sizes$SampleSize[sample_sizes$City == city],
+    !!glue("{city}_%") := NA_real_
+  )
+}) %>%
+  mutate(Question = "Sample Size") %>%
+  select(all_of(interleaved_cols))
+
+answer_long %>%
+  mutate(across(ends_with("%"), round, 2)) %>%
+  select(all_of(interleaved_cols)) %>%
+  bind_rows(sample_row) %>% 
+  mutate(Question = factor(Question, levels = c(paste0("Q", 1:30),
+                                                "Sample Size"))) %>%
+  arrange(Question) %>%
+  kable(
+    caption = 
+      "Answer count and percentage per city per question (audience census)") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                full_width = FALSE, 
+                font_size = 5)
+```
+
+```{r}
+census_captions %>%
+  filter(!question %in% c("Age_group", "Q6_spec", "Q6_spec_exc")) %>%
+  kable( caption = "Question codes (audience census)")
+```
+
+\clearpage
+
+#### Pre snapshot venue survey
+
+```{r}
+answer_summary <- pre_snapshot %>%
+  select(-Q14_15_TEXT) %>% 
+  mutate(Q8 = if_any(starts_with("Q8"), ~!is.na(.)),
+         Q9 = if_any(starts_with("Q9"), ~!is.na(.)),
+         Q12 = if_any(starts_with("Q12"), ~!is.na(.)),
+         Q14 = if_any(starts_with("Q14"), ~!is.na(.)),
+         Q16 = if_else(Q16 != "", TRUE, NA),
+         Q17 = if_else(Q17 != "", TRUE, NA)) %>% 
+  mutate(across(where(is.logical), ~ifelse(. == TRUE, 1, NA))) %>%
+  select(City, num_range("Q", 1:30), Q15_1, Q15_2, Q15_3) %>%
+  rename(Q151 = Q15_1, Q152 = Q15_2, Q153 = Q15_3) %>%
+  select(!c(Q2, Q5, Q19, Q20)) %>% 
+  group_by(City) %>%
+  summarise(across(everything(),
+                   list(perc = ~ (1 - mean(is.na(.))) * 100,
+                        count = ~ sum(!is.na(.))),
+                   .names = "{.col}_{.fn}")) %>%
+  ungroup()
+
+answer_long <- answer_summary %>%
+  pivot_longer(
+    cols = -City,
+    names_to = c("Question", ".value"),
+    names_sep = "_"
+  ) %>%
+  pivot_wider(
+    names_from = City,
+    values_from = c(count, perc),
+    names_glue = "{City}_{.value}"
+  )
+
+names(answer_long) <- names(answer_long) %>%
+  stringr::str_replace("_count$", "_n") %>%
+  stringr::str_replace("_perc$", "_%")
+
+city_names <- unique(pre_snapshot$City)
+interleaved_cols <- c("Question", purrr::map(city_names,
+                                             ~ c(glue("{.x}_n"), glue("{.x}_%"))) %>%
+                        unlist())
+
+sample_sizes <- pre_snapshot %>%
+  group_by(City) %>%
+  summarise(SampleSize = n())
+
+sample_row <- purrr::map_dfc(city_names, function(city) {
+  tibble(
+    !!glue("{city}_n") := sample_sizes$SampleSize[sample_sizes$City == city],
+    !!glue("{city}_%") := NA_real_
+  )
+}) %>%
+  mutate(Question = "Sample Size") %>%
+  select(all_of(interleaved_cols))
+
+answer_long %>%
+  mutate(across(ends_with("%"), round, 2)) %>%
+  select(all_of(interleaved_cols)) %>%
+  bind_rows(sample_row) %>% 
+  mutate(Question = recode(Question,
+                              "Q151" = "Q15_1",
+                              "Q152" = "Q15_2",
+                              "Q153" = "Q15_3")) %>%
+  mutate(Question = factor(Question, levels = c(paste0("Q", 1:14), "Q15_1", "Q15_2",
+                                                "Q15_3", paste0("Q", 16:30),
+                                                "Sample Size"))) %>%
+  arrange(Question) %>%
+  kable(
+    caption = 
+      "Answer count and percentage per city per question (pre snapshot venue survey)") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                full_width = FALSE, 
+                font_size = 5)
+```
+
+```{r}
+pre_captions %>%
+  kable(caption = "Question codes (pre snapshot)")
+```
+
+\clearpage
+
+#### Post snapshot venue survey
+
+```{r}
+answer_summary <- post_snapshot %>%
+  mutate(Q3 = if_any(starts_with("Q3"), ~!is.na(.)),
+         Q5 = if_any(starts_with("Q5"), ~!is.na(.)),
+         Q8 = if_any(starts_with("Q8"), ~!is.na(.)),
+         Q9 = if_any(starts_with("Q19"), ~!is.na(.)),
+         Q11 = if_any(starts_with("Q11"), ~!is.na(.)),
+         Q12 = if_any(starts_with("Q12"), ~!is.na(.)),
+         Q14 = if_any(starts_with("Q14"), ~!is.na(.)),
+         Q15 = if_any(starts_with("Q15"), ~!is.na(.)),
+         Q18 = if_any(starts_with("Q18"), ~!is.na(.)),
+         Q26 = if_any(starts_with("Q26"), ~!is.na(.)),
+         Q28 = if_any(starts_with("Q28"), ~!is.na(.)),
+         Q31 = if_else(Q31 != "", TRUE, NA),
+         Q32 = if_else(Q32 != "", TRUE, NA)) %>% 
+  mutate(across(where(is.logical), ~ifelse(. == TRUE, 1, NA))) %>%
+  select(City, num_range("Q", 1:50)) %>%
+  select(!c(Q29)) %>% 
+  group_by(City) %>%
+  summarise(across(everything(),
+                   list(perc = ~ (1 - mean(is.na(.))) * 100,
+                        count = ~ sum(!is.na(.))),
+                   .names = "{.col}_{.fn}")) %>%
+  ungroup()
+
+answer_long <- answer_summary %>%
+  pivot_longer(
+    cols = -City,
+    names_to = c("Question", ".value"),
+    names_sep = "_"
+  ) %>%
+  pivot_wider(
+    names_from = City,
+    values_from = c(count, perc),
+    names_glue = "{City}_{.value}"
+  )
+
+names(answer_long) <- names(answer_long) %>%
+  stringr::str_replace("_count$", "_n") %>%
+  stringr::str_replace("_perc$", "_%")
+
+city_names <- unique(post_snapshot$City)
+interleaved_cols <- c("Question", purrr::map(city_names,
+                                             ~ c(glue("{.x}_n"), glue("{.x}_%"))) %>%
+                        unlist())
+
+sample_sizes <- post_snapshot %>%
+  group_by(City) %>%
+  summarise(SampleSize = n())
+
+sample_row <- purrr::map_dfc(city_names, function(city) {
+  tibble(
+    !!glue("{city}_n") := sample_sizes$SampleSize[sample_sizes$City == city],
+    !!glue("{city}_%") := NA_real_
+  )
+}) %>%
+  mutate(Question = "Sample Size") %>%
+  select(all_of(interleaved_cols))
+
+answer_long %>%
+  mutate(across(ends_with("%"), round, 2)) %>%
+  select(all_of(interleaved_cols)) %>%
+  bind_rows(sample_row) %>% 
+  mutate(Question = factor(Question, levels = c(paste0("Q", 1:50),
+                                                "Sample Size"))) %>%
+  arrange(Question) %>%
+  kable(
+    caption = 
+      "Answer count and percentage per city per question (post snapshot venue survey)") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                full_width = FALSE, 
+                font_size = 5)
+```
+
+```{r}
+post_captions %>%
+  filter(!question == "City") %>%
+  kable(caption = "Question codes (post snapshot)")
+```

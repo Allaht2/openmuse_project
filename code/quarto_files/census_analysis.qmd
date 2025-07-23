@@ -1,0 +1,331 @@
+---
+title: "Analysis of the census data"
+format: 
+  pdf: 
+    fig-width: 9
+    fig-height: 9
+editor: visual
+execute:
+  echo: FALSE
+  warning: FALSE
+---
+
+This document will go over visualizations of the different census questions. The code will be for all the cities combined and how to only plot data from a specific city.
+
+```{r}
+#| output: FALSE
+# Loading packages needed
+library(tidyverse) 
+library(haven)
+library(kableExtra)
+```
+
+## Visualizations
+
+```{r}
+# Loading combined census data
+census_data_all <- read_sav("../../input/data_processed/combined_census_data.sav") %>%
+  filter(exclude == 0) # Filtering out bad responses
+# Reading the captions
+census_captions <- readxl::read_excel("../../input/other/codebook.xlsx", sheet = 6)
+```
+
+```{r}
+# Year of birth distribution
+census_data_all %>% 
+  haven::as_factor() %>%
+  count(City, Age_group) %>%
+  na.omit() %>%
+  ggplot(aes(y = Age_group, x = n)) + geom_bar(stat = "identity") +
+        labs(y = "Age group", x = "Count",
+             title = census_captions %>%
+               filter(question == "Age_group") %>%
+               select(caption)) + facet_wrap(vars(City)) 
+
+# For a specific city
+# census_data_all %>%
+#   haven::as_factor() %>%
+#   count(City, Age_group) %>%
+#   na.omit() %>%
+#   filter(City == "Helsinki") %>%
+#   ggplot(aes(x = Age_group, y = n)) + geom_bar(stat = "identity") +
+#         labs(x = "Age group", y = "Count") + facet_wrap(vars(City))
+```
+
+```{r}
+# If people live in the city area
+census_data_all %>% 
+    haven::as_factor() %>%
+    count(City, Q4) %>%
+    ggplot(aes(x = Q4, y = n)) + geom_bar(stat = "identity") +
+    facet_wrap(vars(City)) + labs(title = census_captions %>%
+                                    filter(question == "Q4") %>%
+                                    select(caption))
+  
+```
+
+```{r}
+# Gender distribution for all cities
+census_data_all %>% 
+  select(Q2, City) %>%
+  na.omit() %>%
+  ggplot(aes(x = as.factor(Q2))) + geom_bar() +
+  scale_x_discrete(
+    labels = c("1" = "Female", "2" = "Male", "3" = "Other"), name = "Gender") +
+  facet_wrap(vars(City)) + labs(title = census_captions %>%
+                                  filter(question == "Q2") %>%
+                                  select(caption))
+
+# For a specific city
+# census_data_all %>% 
+#   filter(City == "Helsinki") %>%
+#   select(Q2, City) %>%
+#   na.omit() %>%
+#   ggplot(aes(x = as.factor(Q2))) + geom_bar() +
+#   scale_x_discrete(
+#     labels = c("1" = "Female", "2" = "Male", "3" = "Other"), name = "Gender") +
+#   facet_wrap(vars(City)) + labs(title = "Gender distribution")
+```
+
+```{r}
+# Opinion on the night for all cities
+census_data_all %>%
+  select(Q9, City) %>%
+  na.omit() %>%
+  haven::as_factor() %>%
+  ggplot(aes(x = Q9)) + geom_bar() + facet_wrap(vars(City)) +
+  labs(x = "Opinion", title = census_captions %>%
+         filter(question == "Q9") %>%
+         select(caption))
+
+# For a specific city
+# census_data_all %>%
+#   filter(City == "Helsinki") %>%
+#   select(Q9, City) %>%
+#   na.omit() %>%
+#   haven::as_factor() %>%
+#   ggplot(aes(x = Q9)) + geom_bar() + facet_wrap(vars(City)) +
+#   labs(title = "How was your night", x = "Opinion")
+```
+
+```{r}
+# Opinion on the scene for all cities
+census_data_all %>%
+  select(Q11, City) %>%
+  na.omit() %>%
+  haven::as_factor() %>%
+  ggplot(aes(y = Q11)) + geom_bar() + facet_wrap(vars(City)) +
+  labs(y = "Opinion", title = census_captions %>%
+         filter(question == "Q11") %>%
+         select(caption))
+
+# For a specific city
+# census_data_all %>%
+#   filter(City == "Helsinki") %>%
+#   select(Q11, City) %>%
+#   na.omit() %>%
+#   haven::as_factor() %>%
+#   ggplot(aes(y = Q11)) + geom_bar() + facet_wrap(vars(City)) +
+#   labs(title = "How is the scene?", y = "Opinion")
+```
+
+```{r}
+# What kinds of music people see live for all the cities
+census_data_all %>%
+  select(starts_with("Q12"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  group_by(City) %>%
+  count(value) %>%
+  ggplot(aes(y = value, x = n)) + geom_bar(stat = "identity") +
+  facet_wrap(vars(City)) +
+  labs(x = "Count", y = "Category", title = census_captions %>%
+         filter(question == "Q12") %>%
+         select(caption))
+
+# For a specific city
+# census_data_all %>%
+#   select(starts_with("Q12"), City) %>%
+#   filter(City == "Helsinki") %>%
+#   haven::as_factor() %>%
+#   pivot_longer(!City, names_to = "question", values_to = "value") %>%
+#   na.omit %>%
+#   count(value) %>%
+#   ggplot(aes(y = value, x = n)) + geom_bar(stat = "identity") +
+#   labs(title = "What kind of music people like see live",
+#       x = "Count", y = "Category")
+  
+```
+
+```{r}
+# How many events attend on average for all the cities
+census_data_all %>% 
+  select(Q13, City) %>%
+  haven::as_factor() %>%
+  na.omit() %>%
+  ggplot(aes(y = as.factor(Q13))) + geom_bar() + facet_wrap(vars(City)) + 
+  labs(y = "Number of events", title = census_captions %>%
+         filter(question == "Q13") %>%
+         select(caption))
+
+# For a specific city 
+# census_data_all %>% 
+#   select(Q13, City) %>%
+#   filter(City == "Helsinki") %>%
+#   na.omit() %>%
+#   ggplot(aes(x = as.factor(Q13))) + geom_bar() + facet_wrap(vars(City)) + 
+#   labs(x = "Number of events", title = "How many events attend per month on average")
+```
+
+```{r}
+# Prefered size of the venue
+census_data_all %>% 
+  select(Q14, City) %>%
+  haven::as_factor() %>%
+  na.omit() %>%
+  ggplot(aes(y = as.factor(Q14))) + geom_bar() + facet_wrap(vars(City)) + 
+  labs(y = "Size of the venue",
+       title = census_captions %>%
+         filter(question == "Q14") %>%
+         select(caption))
+
+# For a specific city
+# census_data_all %>% 
+#   select(Q14, City) %>%
+#   filter(City == "Helsinki") %>%
+#   na.omit() %>%
+#   ggplot(aes(x = as.factor(Q14))) + geom_bar() + facet_wrap(vars(City)) + 
+#   labs(x = "Size of the venue",
+#        title = "What sized venue you enjoy seeing live music most?")
+```
+
+```{r}
+# What would encourage to see live music
+census_data_all %>% 
+  select(Q16, City) %>%
+  haven::as_factor() %>%
+  na.omit() %>%
+  ggplot(aes(y = as.factor(Q16))) + geom_bar() + facet_wrap(vars(City)) +
+  labs(y = "Reason", title = census_captions %>%
+         filter(question == "Q16") %>%
+         select(caption)) +
+  scale_y_discrete(labels = scales::label_wrap(40))
+
+# For a specific city
+# census_data_all %>% 
+#   select(Q16, City) %>%
+#   filter(City == "Helsinki") %>%
+#   haven::as_factor() %>%
+#   na.omit() %>%
+#   ggplot(aes(y = as.factor(Q16))) + geom_bar() + facet_wrap(vars(City)) +
+#   labs(y = "Reason", title = "What would encourage you to see \n more live music") +
+#   scale_y_discrete(labels = scales::label_wrap(40))
+```
+
+```{r}
+# How people travel to the events
+census_data_all %>%
+  select(starts_with("Q8"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  group_by(City) %>%
+  count(value) %>%
+  ggplot(aes(y = value, x = n)) + geom_bar(stat = "identity") +
+  facet_wrap(vars(City)) +
+  labs(x = "Count", y = "Mode of transport", title = census_captions %>%
+         filter(question == "Q8") %>%
+         select(caption))
+
+# For a specific city
+# census_data_all %>%
+#   select(starts_with("Q8"), City) %>%
+#   filter(City == "Helsinki") %>%
+#   haven::as_factor() %>% 
+#   pivot_longer(!City, names_to = "question", values_to = "value") %>%
+#   na.omit %>%
+#   count(value) %>%
+#   ggplot(aes(y = value, x = n)) + geom_bar(stat = "identity") +
+#   labs(title = "How people traveled to the event")
+```
+
+```{r}
+#| warning: FALSE
+# Total Spending
+census_data_all %>%
+    rowwise() %>%
+    mutate(sums = sum(c_across(starts_with("Q6")))) %>%
+    select(sums, City) %>% 
+    ggplot(aes(x = sums)) + geom_histogram() + facet_wrap(vars(City)) +
+    labs(x = "Spending", title = census_captions %>%
+           filter(question == "Q6") %>%
+           select(caption))
+
+# For a specific city
+# census_data_all %>%
+#     filter(City == "Helsinki") %>%
+#     rowwise() %>%
+#     mutate(sums = sum(c_across(starts_with("Q6")))) %>%
+#     select(sums, City) %>%
+#     ggplot(aes(x = sums)) + geom_histogram() + facet_wrap(vars(City)) +
+#     labs(x = "Spending", title = "Total spending")
+```
+
+```{r}
+# What is preventing from seeing live music
+census_data_all %>%
+  select(starts_with("Q15"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  group_by(City) %>%
+  count(value) %>%
+  ggplot(aes(y = value, x = n)) + geom_bar(stat = "identity") +
+  facet_wrap(vars(City)) +
+  labs(x = "Count", y = "Reason", title = census_captions %>%
+         filter(question == "Q15") %>%
+         select(caption)) +
+  scale_y_discrete(labels = scales::label_wrap(40))
+
+# For a specific city 
+# census_data_all %>%
+#   select(starts_with("Q15"), City) %>%
+#   filter(City == "Helsinki") %>%
+#   haven::as_factor() %>% 
+#   pivot_longer(!City, names_to = "question", values_to = "value") %>%
+#   na.omit %>%
+#   count(value) %>%
+#   ggplot(aes(y = value, x = n)) + geom_bar(stat = "identity") +
+#   labs(title = "What is preventing from seeing live music") +
+#   scale_y_discrete(labels = scales::label_wrap(40))
+```
+
+```{r}
+# Do you agree with statements by city
+census_data_all %>%
+  select(starts_with("Q17"), City) %>%
+  haven::as_factor() %>% 
+  pivot_longer(!City, names_to = "question", values_to = "value") %>%
+  na.omit %>%
+  group_by(City) %>%
+  count(value) %>%
+  ggplot(aes(y = value, x = n)) + geom_bar(stat = "identity") +
+  facet_wrap(vars(City)) + 
+  labs(x = "Count", y = "Statement", title = census_captions %>%
+         filter(question == "Q17") %>%
+         select(caption)) +
+  scale_y_discrete(labels = scales::label_wrap(50))
+
+# For a specific city
+# census_data_all %>%
+#   select(starts_with("Q17"), City) %>%
+#   filter(City == "Helsinki") %>%
+#   haven::as_factor() %>%
+#   pivot_longer(!City, names_to = "question", values_to = "value") %>%
+#   na.omit %>%
+#   count(value) %>%
+#   ggplot(aes(y = value, x = n)) + geom_bar(stat = "identity") +
+#   labs(title = "Do you agree with the statement") +
+#   scale_y_discrete(labels = scales::label_wrap(50))
+```

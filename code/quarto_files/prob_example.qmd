@@ -1,0 +1,311 @@
+---
+title: "Examples of probabilistic analysis of ordinal survey data"
+format: pdf
+editor: visual
+execute:
+  warning: false
+  message: false
+---
+
+## An example of analyzing ordinal data with a probabilistic model
+
+```{r libraries}
+# Load libraries needed for the analysis
+library(tidyverse)  
+library(brms)
+library(tidybayes)
+library(haven)
+library(broom.mixed)
+library(kableExtra)
+```
+
+```{r}
+# Loading the data
+census_data_all <- read_sav("../../input/data_processed/combined_census_data.sav") %>%
+  filter(exclude == 0) %>%
+  mutate(Q2 = haven::as_factor(Q2),
+         Age_group = case_when(
+          Age < 18 ~ "<18",
+          Age > 17 & Age < 30 ~ "18-29",
+          Age > 29 & Age < 50 ~ "30-49",
+          Age > 49 & Age < 65 ~ "50-64",
+          Age > 64 ~ ">64"
+        ))
+```
+
+This document provides an overview how ordinal variables can be analyzed using probabilistic models.
+
+### Look at the data
+
+The live music audience census has several ordinal variables. For the examples in this document, we will focus on the question "How would you rate the live music scene in your city?", which is coded as Q11 in the data. To begin let's focus only on the Helsinki data.
+
+```{r}
+# Seperating the Helsinki data
+helsinki_data <- census_data_all %>%
+  filter(City == "Helsinki") 
+```
+
+Let's take a look how people in Helsinki answered to the question.
+
+```{r}
+helsinki_data %>%
+  count(Q11) %>%
+  na.omit()
+```
+
+We can see that no one responded with option one, and only one person responded with option two. Using frequentist model here can lead to problems with providing estimates for these two categories. Probabilistic models provide better estimates in this scenario.
+
+### Fitting an ordinal regression model
+
+There are several regression models that can be used to analyze ordinal data, but the most common is cumulative logistic ordinal regression model. This is the model that is used here. The probabilistic model can be fitted using `brm` function from `brms` package. This function allows fitting several different regression models in the probabilistic framework. Let's start off by fitting a model with gender, coded as Q2, and age group as explanatory variables.
+
+```{r}
+#| output: false
+# Changing the data type to work with the model
+helsinki_data <- helsinki_data %>%
+  mutate(Q11 = as.numeric(Q11))
+# Fitting the model
+fit1 <- brm(Q11 ~ Q2 + Age_group, data = helsinki_data,
+            family = cumulative("logit"), seed = 2025, 
+            prior = prior(normal(-1.39,1), class = "Intercept", coef = "1") + 
+                        prior(normal(-0.41,1), class = "Intercept", coef = "2") +
+                        prior(normal(0.41,1), class = "Intercept", coef = "3") +
+                        prior(normal(1.39,1), class = "Intercept", coef = "4") +
+                        prior(normal(0,2), class = "b"), backend = "cmdstanr",
+            control = list(adapt_delta = 0.95), silent = 0, refresh = 0)
+
+```
+
+In the code above the family command is used to specify the model family, cumulative regression model with logistic link function.
+
+```{r}
+#| size: footnotesize
+# Looking at the results of the model fit
+tidy(fit1) %>%
+  select(-c(effect, component, group)) %>%
+  kable()
+```
+
+The interesting values here are the estimates for the covariate effects, that is `Q2Male`, `Age_group18M29`, etc. These tell how much these groups differ from the reference category for that categorical variable, female for gender and over 64 for age group. All the estimates are close to zero and the 95% intervals include zero, so the explanatory variables don't seem to have a strong effect on the answer.
+
+The differences between the different levels of the explanatory variables can also be assessed visually. `brms` includes a useful function called `conditional_effects()` for this purpose. It is important to specify `categorical = TRUE` when working with ordinal models.
+
+```{r}
+# Plotting predictions at the different levels of explanatory variables
+conditional_effects(fit1, categorical = TRUE)
+```
+
+There does not seem to be huge differences in the answering patters between different genders or age groups.
+
+The explanatory variables can also be compared using predicted mean category.
+
+```{r}
+# Mean category
+expand.grid(Q2 = c("Female", "Male", "Another gender identity"), 
+                         Age_group = c("30-49", "18-29", "50-64", ">64")) %>%
+  add_epred_draws(object = fit1) %>%
+  mutate(mean_cat = as.numeric(.category) * .epred) %>%
+  group_by(.draw, .row, Q2) %>%
+  summarise(mean_cat = sum(mean_cat)) %>% 
+  ggplot(aes(x = mean_cat, y = Q2)) +
+  stat_interval() +
+  scale_color_grey(end = 0.1, start = 0.6, name = "Credible\ninterval") +
+  theme_bw(base_size = 14) +
+  theme(legend.key.size = unit(0.3, "cm")) +
+  labs(x = "Mean category", y = "Gender")
+```
+
+### Priors used
+
+In the model fitting above there was no comment on setting the priors. Priors are an important part of probabilistic models. A typical regression model has one intercept term, but the cumulative model has $J-1$ intercept terms, where $J$ is the number of answer categories. These intercepts can be set a common prior distribution, but better option is to have a separate one for them. One way to set the prior distributions is to assume that all the categories have an equal probability, i.e. 20% when there are five categories. The hyperparameter values can be obtained sing logit function and cumulative probabilities.
+
+```{r}
+# Calculating priors hyperparameter valeus
+tibble(prob = cumsum(c(0.2, 0.2, 0.2, 0.2, 0.2))) %>%
+  mutate(hyperparameter_value = log(prob/(1-prob)))
+```
+
+From above we get the values for the hyperparameters.
+
+The prior used for the coefficient effects is a normal distribution with expected values of zero and standard derivation of 2. This implies that the effects are distributed around zero, but non-zero effects are also likely.
+
+### Model comparison
+
+Probabilistic models offer an easy way to do model comparison. This is done with leave-it-one-out cross-validation method, which is implemented in `loo()` function.
+
+Let's start by fitting a model only gender as a explanatory variable.
+
+```{r}
+#| output: false
+# Model without age group as explanatory variable
+fit2 <- brm(Q11 ~ Q2, data = helsinki_data,
+            family = cumulative("logit"), seed = 2025, 
+            prior = prior(normal(-1.39,1), class = "Intercept", coef = "1") + 
+                        prior(normal(-0.41,1), class = "Intercept", coef = "2") +
+                        prior(normal(0.41,1), class = "Intercept", coef = "3") +
+                        prior(normal(1.39,1), class = "Intercept", coef = "4") +
+                        prior(normal(0,2), class = "b"), backend = "cmdstanr",
+            control = list(adapt_delta = 0.99), silent = 0, refresh = 0)
+```
+
+```{r}
+#| size: footnotesize
+# Model output
+tidy(fit2) %>%
+  select(-c(effect, component, group)) %>%
+  kable()
+```
+
+From the output we see that the gender is now the only explanatory variable. We can now use `loo()` to compare these two models to each other.
+
+```{r}
+# Comparing the two models to each other
+loo(fit1, fit2)$diffs
+```
+
+From the output we see that the second model, without age group, seems to perform slightly better. Larger elpd value indicates better fit.
+
+### Posterior predictive checks
+
+Posterior predictive checks can be used to check that the values given by probabilistic model are in line with the data used to fit the model. For the ordinal cumulative model plotting the predicted category counts against the observed counts is a common posterior check. This can be done using function `pp_check()` from `brms` with argument `type = "bars"`.
+
+```{r}
+# Model posterior predictive check
+pp_check(fit1, type = "bars")
+```
+
+Based on the figure, the model output is inline with the observed data. This checking can also be done at different levels of categorical explanatory variable, for example gender. The function used is the same, but now `type = "bars_grouped"` is used instead and additional function parameter is needed `group = "Q2"`.
+
+```{r}
+#| fig-width: 10
+# Model posterior predictive check at different levels of gender
+pp_check(fit1, type = "bars_grouped", group = "Q2")
+```
+
+Again, the model output seems to agree with the observed data.
+
+### Testing proportional odds assumption
+
+Proportional odds assumption, which means that the effect of explanatory variables is same for all answer categories, is an important part of the cumulative logistic model. This assumption should always be tested to be sure that the model isn't mispecified. In the probabilistic framework this can be done using the `loo` function introduced before.
+
+The assumption is tested by fitting a model that allows category-specific effects that is then compared to the proportional odds model. This alternative model cannot be fit using the cumulative family as it can lead to problems, which is why an alternative model family is used. We will use the adjacent-category model for this purpose. The category specific effects are specified by putting the explanatory variable inside function `cs()`.
+
+```{r}
+#| output: false
+# Testing proportional odds assumption 
+# Fitting model from the 
+fit1_adj <- brm(Q11 ~ Q2 + Age_group, data = helsinki_data,
+            family = acat("logit"), seed = 2025, 
+            prior = prior(normal(-1.39,1), class = "Intercept", coef = "1") + 
+                        prior(normal(-0.41,1), class = "Intercept", coef = "2") +
+                        prior(normal(0.41,1), class = "Intercept", coef = "3") +
+                        prior(normal(1.39,1), class = "Intercept", coef = "4") +
+                        prior(normal(0,2), class = "b"), backend = "cmdstanr",
+            control = list(adapt_delta = 0.95), silent = 0, refresh = 0)
+# Fitting model with category effects for gender
+fit1_cs_Q2 <- brm(Q11 ~ cs(Q2) + Age_group, data = helsinki_data,
+            family = acat("logit"), seed = 2025, 
+            prior = prior(normal(-1.39,1), class = "Intercept", coef = "1") + 
+                        prior(normal(-0.41,1), class = "Intercept", coef = "2") +
+                        prior(normal(0.41,1), class = "Intercept", coef = "3") +
+                        prior(normal(1.39,1), class = "Intercept", coef = "4") +
+                        prior(normal(0,2), class = "b"), backend = "cmdstanr",
+            control = list(adapt_delta = 0.95), silent = 0, refresh = 0)
+# Fitting model with category effects for age group
+fit1_cs_age <- brm(Q11 ~ Q2 + cs(Age_group), data = helsinki_data,
+            family = acat("logit"), seed = 2025, 
+            prior = prior(normal(-1.39,1), class = "Intercept", coef = "1") + 
+                        prior(normal(-0.41,1), class = "Intercept", coef = "2") +
+                        prior(normal(0.41,1), class = "Intercept", coef = "3") +
+                        prior(normal(1.39,1), class = "Intercept", coef = "4") +
+                        prior(normal(0,2), class = "b"), backend = "cmdstanr",
+            control = list(adapt_delta = 0.95), silent = 0, refresh = 0)
+
+fit1_cs <- brm(Q11 ~ cs(Q2) + cs(Age_group), data = helsinki_data,
+            family = acat("logit"), seed = 2025, 
+            prior = prior(normal(-1.39,1), class = "Intercept", coef = "1") + 
+                        prior(normal(-0.41,1), class = "Intercept", coef = "2") +
+                        prior(normal(0.41,1), class = "Intercept", coef = "3") +
+                        prior(normal(1.39,1), class = "Intercept", coef = "4") +
+                        prior(normal(0,2), class = "b"), backend = "cmdstanr",
+            control = list(adapt_delta = 0.95), silent = 0, refresh = 0)
+```
+
+```{r}
+# Comparing the models using loo
+loo(fit1, fit1_adj, fit1_cs, fit1_cs_age, fit1_cs_Q2)$diffs
+```
+
+To differentiate the effect of the modeling family from the effect of the explanatory variables, an adjacent-category model is fit without the category-specific effects. We can see from the output that the proportional odds assumption seems to hold. Interestingly the adjacent-category family seems to give a little better of a fit, but the non-proportional versions perform worse.
+
+## Hierarchical example
+
+If we want to compare the differences between the cities, we can do so by fitting a hierarchical model. The hierarchical model can also be fit with the `brm()` function. This is done by adding the term `(1 | City)` to the model formula.
+
+```{r}
+#| output: false
+# Fitting a hieararchical model
+census_data_all <- census_data_all %>%
+  mutate(Q11 = as.integer(Q11))
+fith <- brm(Q11 ~ Q2 + Age_group + (1 | City), data = census_data_all,
+            family = cumulative("logit"), seed = 2025, 
+            prior = prior(normal(-1.39,1), class = "Intercept", coef = "1") + 
+                        prior(normal(-0.41,1), class = "Intercept", coef = "2") +
+                        prior(normal(0.41,1), class = "Intercept", coef = "3") +
+                        prior(normal(1.39,1), class = "Intercept", coef = "4") +
+                        prior(normal(0,2), class = "b") + 
+                        prior(normal(0,1), class = "sd"), backend = "cmdstanr",
+            control = list(adapt_delta = 0.99), silent = 0, refresh = 0)
+```
+
+Now the model fitting time is much longer when compared to the two previous models. Let's look at the output.
+
+```{r}
+#| size: footnotesize
+# Model ouptut
+tidy(fith) %>%
+  select(-c(effect, component, group)) %>%
+  kable()
+```
+
+Now there is an additional term in the output, `sd(Intercetp)`, which is estimated standard deviation for the city-specific random effects. Let's plot the city-specific estimates and their intervals. To do this we have to first retrieve expected posterior values from the model. This can be done using function `add_epred_draws` function from `tidybayes` package.
+
+```{r}
+# Obtaining posterior estimates
+fith_draws <- expand.grid(Q2 = c("Female", "Male", "Another gender identity"), 
+                         Age_group = c("30-49", "18-29", "50-64", ">64"),
+                         City = c("Helsinki", "Lviv",
+                                  "Mannheim", "Vilnius", "Heidelberg")) %>%
+  add_epred_draws(object = fith)
+```
+
+```{r}
+# Plotting the city comparisons
+fith_draws %>% 
+  group_by(.category, City) %>%
+  summarise(est = mean(.epred), lwr95 = quantile(.epred, 0.025),
+            upr95 = quantile(.epred, 0.975), lwr50 = quantile(.epred, 0.25), 
+            upr50 = quantile(.epred, 0.75)) %>%
+  ggplot(aes(x = .category, y = est, color = City)) +
+  geom_point(position = position_dodge(width = 0.4), size = 2) +
+  geom_errorbar(aes(ymin = lwr95, ymax = upr95), width = 0,
+                position = position_dodge(width = 0.4), size = 0.5)  +
+  geom_errorbar(aes(ymin = lwr50, ymax = upr50), width = 0,
+                position = position_dodge(width = 0.4), size = 1.5) +
+  theme_bw(base_size = 14) +
+  theme(legend.position = c(0.1,0.8),
+        legend.background = element_rect(fill = "transparent"),
+        legend.key = element_rect(fill = "transparent"),
+        legend.key.size = unit(0.3, "cm")) +
+  labs(x = "Answer category", y = "Probability",
+       color = "City", subtitle = "Opinion on the scene") +
+  scale_y_continuous(label = scales::percent)
+```
+
+We can see that there are some differences between the cities with people in Helsinki and Lviv seem more likely to answer the positive categories. It is important to note that the intervals for Heidelberg are large, because the number of answers from the city was low.
+
+## Conclusion
+
+In this document we gave an overview of how to do probabilistic analysis of ordinal survey data. We covered how to fit the model and how to do model checking and comparison in the probabilistic framework. Additionally, we provided an example how to conduct hierarchical analysis of the data. If you want to learn more about the `brms` package, you can check out its [website](https://paulbuerkner.com/brms/).
+
+For more advanced forms of analysis you can check out the file `advanced_prob_examples.qmd` for those.

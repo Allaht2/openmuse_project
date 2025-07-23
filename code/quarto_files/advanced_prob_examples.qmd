@@ -1,0 +1,357 @@
+---
+title: "More advanced probabilistic ordinal model examples"
+format: pdf
+editor: visual
+execute:
+  warning: false
+  message: false
+---
+
+This document will provide more examples how probabilistic models can be used to fit more advanced ordinal regression models.
+
+```{r}
+# Load libraries needed for the analysis
+library(tidyverse)  
+library(brms)
+library(tidybayes)
+library(haven)
+library(kableExtra)
+library(broom.mixed)
+```
+
+```{r}
+# Loading the data
+census_data_all <- read_sav("../../input/data_processed/combined_census_data.sav") %>%
+  filter(exclude == 0) %>%
+  mutate(Q2 = haven::as_factor(Q2),
+         Age_group = case_when(
+          Age < 18 ~ "<18",
+          Age > 17 & Age < 30 ~ "18-29",
+          Age > 29 & Age < 50 ~ "30-49",
+          Age > 49 & Age < 65 ~ "50-64",
+          Age > 64 ~ ">64"
+        ))
+```
+
+## Varying thresholds model
+
+#### Non-hierarchical model
+
+The typical ordinal cumulative model assumes that the thresholds are same for all the explanatory variables. It may sometimes be the case that there is variation at threshold that depends on the explanatory variables.
+
+Let's fit a model that has its own threshold values for every city. This is done by adding the term `thres(gr = City, x = 4)` to the model formula. The code for the model looks quite daunting now, because the priors have to be set separately for all the cities. We will use the same prior for all the cities, but it is also possible to set separate priors for all the cities.
+
+```{r}
+#| output: false
+# Fitting the varying thresholds model
+census_data_all <- census_data_all %>%
+  mutate(Q11 = as.numeric(Q11))
+fit_vt <- brm(Q11 | thres(gr = City, x = 4) ~ Q2 + Age_group,
+                      family = cumulative("logit"), data = census_data_all,
+                      seed = 2025, cores = 4, control = list(adapt_delta = 0.99),
+                      prior =  
+                        prior(normal(-1.4,1), class = "Intercept", coef = "1",
+                              group = "Heidelberg") +
+                        prior(normal(-0.4,1), class = "Intercept", coef = "2",
+                              group = "Heidelberg") +
+                        prior(normal(0.4,1), class = "Intercept", coef = "3",
+                              group = "Heidelberg") +
+                        prior(normal(1.4,1), class = "Intercept", coef = "4",
+                              group = "Heidelberg") + 
+                        prior(normal(-1.4,1), class = "Intercept", coef = "1",
+                              group = "Helsinki") +
+                        prior(normal(-0.4,1), class = "Intercept", coef = "2",
+                              group = "Helsinki") +
+                        prior(normal(0.4,1), class = "Intercept", coef = "3",
+                              group = "Helsinki") +
+                        prior(normal(1.4,1), class = "Intercept", coef = "4",
+                              group = "Helsinki") + 
+                        prior(normal(-1.4,1), class = "Intercept", coef = "1",
+                              group = "Lviv") +
+                        prior(normal(-0.4,1), class = "Intercept", coef = "2",
+                              group = "Lviv") +
+                        prior(normal(0.4,1), class = "Intercept", coef = "3",
+                              group = "Lviv") +
+                        prior(normal(1.4,1), class = "Intercept", coef = "4",
+                              group = "Lviv") +
+                        prior(normal(-1.4,1), class = "Intercept", coef = "1",
+                              group = "Mannheim") +
+                        prior(normal(-0.4,1), class = "Intercept", coef = "2",
+                              group = "Mannheim") +
+                        prior(normal(0.4,1), class = "Intercept", coef = "3",
+                              group = "Mannheim") +
+                        prior(normal(1.4,1), class = "Intercept", coef = "4",
+                              group = "Mannheim") + 
+                        prior(normal(-1.4,1), class = "Intercept", coef = "1",
+                              group = "Vilnius") +
+                        prior(normal(-0.4,1), class = "Intercept", coef = "2",
+                              group = "Vilnius") +
+                        prior(normal(0.4,1), class = "Intercept", coef = "3",
+                              group = "Vilnius") +
+                        prior(normal(1.4,1), class = "Intercept", coef = "4",
+                              group = "Vilnius") + 
+                        prior(normal(0,2), class = "b"),
+                      backend = "cmdstanr", silent = 2, refresh = 0)
+
+```
+
+Let's look at the model output.
+
+```{r}
+#| size: footnotesize
+# Model output
+tidy(fit_vt) %>%
+  select(-c(effect, component, group)) %>%
+  kable()
+```
+
+From the output we see that every city now has its own intercept terms. Let's plot the estimates and their intervals and compare the results.
+
+```{r}
+# Plotting the thresholds
+posterior_summary(fit_vt)[1:20,] %>%
+  data.frame() %>%
+  mutate(alpha = rep(1:4, times = 5, length.out = 20),
+         City = rep(c("Helsinki", "Vilnius", "Lviv", "Mannheim", "Heidelber"),
+                    each = 4, length.out = 20)) %>%
+  mutate(alpha = str_c("alpha[", alpha, "]"),
+         City = factor(City)) %>%
+  ggplot(aes(y = Estimate, ymin = Q2.5, ymax = Q97.5, x = alpha, group = City, 
+             color = City)) + 
+  geom_pointrange(position = position_dodge(width = -0.5), fatten = 1.5) +
+  scale_color_viridis_d("City", option = "F", end = 0.8, direction = -1) +
+  scale_x_discrete(NULL, labels = ggplot2:::parse_safe) + 
+  coord_flip() + labs(title = "City-specific thresholds", y = "Value") +
+  theme_bw(14) +
+  theme(legend.position = c(0.9, 0.4),
+                       legend.background = element_rect(fill = "transparent"),
+                       legend.key = element_rect(fill = "transparent"),
+                       legend.key.size = unit(0.3, "cm"))
+```
+
+From the figure we can see that there is some variation in the threshold values.
+
+#### Hierarchical model
+
+The varying thresholds model can also be fitted in the hierarchical framework. This is done by adding the term `(1 | City)` to the model formula.
+
+```{r}
+#| output: false
+# Fitting the model
+fit_vth <- brm(Q11 | thres(gr = City, x = 4) ~ Q2 + Age_group + (1 | City),
+                      family = cumulative("logit"), data = census_data_all,
+                      seed = 2025, cores = 4, control = list(adapt_delta = 0.99),
+                      prior =  
+                        prior(normal(-1.4,1), class = "Intercept", coef = "1",
+                              group = "Heidelberg") +
+                        prior(normal(-0.4,1), class = "Intercept", coef = "2",
+                              group = "Heidelberg") +
+                        prior(normal(0.4,1), class = "Intercept", coef = "3",
+                              group = "Heidelberg") +
+                        prior(normal(1.4,1), class = "Intercept", coef = "4",
+                              group = "Heidelberg") + 
+                        prior(normal(-1.4,1), class = "Intercept", coef = "1",
+                              group = "Helsinki") +
+                        prior(normal(-0.4,1), class = "Intercept", coef = "2",
+                              group = "Helsinki") +
+                        prior(normal(0.4,1), class = "Intercept", coef = "3",
+                              group = "Helsinki") +
+                        prior(normal(1.4,1), class = "Intercept", coef = "4",
+                              group = "Helsinki") + 
+                        prior(normal(-1.4,1), class = "Intercept", coef = "1",
+                              group = "Lviv") +
+                        prior(normal(-0.4,1), class = "Intercept", coef = "2",
+                              group = "Lviv") +
+                        prior(normal(0.4,1), class = "Intercept", coef = "3",
+                              group = "Lviv") +
+                        prior(normal(1.4,1), class = "Intercept", coef = "4",
+                              group = "Lviv") +
+                        prior(normal(-1.4,1), class = "Intercept", coef = "1",
+                              group = "Mannheim") +
+                        prior(normal(-0.4,1), class = "Intercept", coef = "2",
+                              group = "Mannheim") +
+                        prior(normal(0.4,1), class = "Intercept", coef = "3",
+                              group = "Mannheim") +
+                        prior(normal(1.4,1), class = "Intercept", coef = "4",
+                              group = "Mannheim") + 
+                        prior(normal(-1.4,1), class = "Intercept", coef = "1",
+                              group = "Vilnius") +
+                        prior(normal(-0.4,1), class = "Intercept", coef = "2",
+                              group = "Vilnius") +
+                        prior(normal(0.4,1), class = "Intercept", coef = "3",
+                              group = "Vilnius") +
+                        prior(normal(1.4,1), class = "Intercept", coef = "4",
+                              group = "Vilnius") + 
+                        prior(normal(0,2), class = "b") + 
+                        prior(normal(0,1), class = "sd"),
+                      backend = "cmdstanr", silent = 2, refresh = 0)
+```
+
+Let's look at the model output.
+
+```{r}
+#| size: footnotesize
+# Model output
+tidy(fit_vth) %>%
+  select(-c(effect, component, group)) %>%
+  kable()
+```
+
+Now there is the variance term for the random effects.
+
+## Varying dispersion model
+
+#### Non-hierarchical model
+
+If there is a reason to suspect that there is additional variance that is not taken into account by the normal cumulative model, a model with varying dispersion can be fit. The model allows modeling additional variance with the explanatory variables.
+
+Let's fit a model that has varying dispersion based on the gender variable. This is done by wrapping the normal formula inside function `bf()` while the varying dispersion part is specified inside function `lf()`. It is important to set `cmc = FALSE` inside the `lf()` function.
+
+```{r}
+#| output: false
+# Fitting the model
+fit_vd <- brm(bf(Q11 | thres(x = 4)  ~  Age_group + Q2) +
+                         lf(disc ~ 0 + Q2, cmc = FALSE),
+                      family = cumulative("logit"), data = census_data_all,
+                      seed = 2025, cores = 4, control = list(adapt_delta = 0.99),
+                      prior = prior(normal(-1.39,1), class = "Intercept", coef = "1") +
+                        prior(normal(-0.45,1), class = "Intercept", coef = "2") +
+                        prior(normal(0.45,1), class = "Intercept", coef = "3") +
+                        prior(normal(1.39,1), class = "Intercept", coef = "4") +
+                        prior(normal(0,2), class = "b") + 
+                        prior(normal(0,1), class = "b", dpar = "disc"),
+                      backend = "cmdstanr", silent = 2, refresh = 0)
+```
+
+Let's take a look at the model output.
+
+```{r}
+#| size: footnotesize
+# Model output
+tidy(fit_vd) %>%
+  select(-c(effect, component, group)) %>% 
+  kable()
+```
+
+The terms `disc_Q2Male` and `disc_Q2Anothergenderidentity` describe how the variance of these terms compare to the reference category female. The output has to be transformed to a form where it makes sense.
+
+```{r}
+# Variace terms
+tibble(Gender = c("Female", "Male", "Anothergenderidentity"),
+       sigma = 1/exp(c(0, fixef(fit_vd)["disc_Q2Male",1],
+                       fixef(fit_vd)["disc_Q2Anothergenderidentity",1]))) %>%
+  kable()
+```
+
+We see that people with another gender identity have a higher variance when compared to females.
+
+Let's also plot the distributions for the different genders and compare the results.
+
+```{r}
+# Plotting the distributions
+tibble(Q2 = c("Female", "Male", "Anothergenderidentity"),
+       mu = c(0, fixef(fit_vd)["Q2Male",1],
+              fixef(fit_vd)["Q2Anothergenderidentity",1]),
+       sigma = 1/exp(c(0, fixef(fit_vd)["disc_Q2Male",1],
+                       fixef(fit_vd)["disc_Q2Anothergenderidentity",1]))) %>%
+    expand(nesting(Q2, mu, sigma), 
+           x = seq(from = -10.5, to = 5.5, length.out = 500)) %>% 
+    mutate(d = dlogis(x, mu, sigma)) %>% 
+    ggplot(aes(x = x, y = d, fill = Q2)) + 
+    geom_area(alpha = 1/2, position = "identity") +
+    geom_vline(xintercept = fixef(fit_vd)[1:4, 1], linetype = 3) +
+    scale_x_continuous(expression(Phi), breaks = -10:5,
+                       sec.axis = dup_axis(
+                           name = NULL,
+                           breaks = fixef(fit_vd)[1:4, 1] %>% as.double(),
+                           labels = parse(text = str_c("alpha[", 1:4, "]"))
+                       )) +
+    scale_y_continuous(NULL, breaks = NULL) +
+    coord_cartesian(xlim = c(-10, 5)) +
+    theme_bw(base_size = 14) +
+    theme(legend.position = c(0.18,0.7),
+          legend.background = element_rect(fill = "transparent"),
+          legend.key = element_rect(fill = "transparent"),
+          legend.key.size = unit(0.3, "cm")) + 
+    labs(subtitle = "Varying dispersion model", fill = "Gender")
+```
+
+From the figure it is clear that there is really no difference between males and females. However, people with another gender identity seem to have a lower mean response and higher variance.
+
+#### Hierarchical model
+
+The varying dispersion model can also be fitted inside the hierarchical framework. The dispersion itself can have a hierarchical effect. This done by adding `(1 | City)` term to the dispersion formula inside function `lf()`.
+
+```{r}
+#| output: false
+# Fitting the model
+fit_vdh <- brm(bf(Q11 | thres(x = 4)  ~  Age_group + Q2 + (1 | City)) +
+                         lf(disc ~ 0 + (1 | City), cmc = FALSE),
+                      family = cumulative("logit"), data = census_data_all,
+                      seed = 2025, cores = 4, control = list(adapt_delta = 0.99),
+                      prior = prior(normal(-1.39,1), class = "Intercept", coef = "1") +
+                        prior(normal(-0.45,1), class = "Intercept", coef = "2") +
+                        prior(normal(0.45,1), class = "Intercept", coef = "3") +
+                        prior(normal(1.39,1), class = "Intercept", coef = "4") +
+                        prior(normal(0,2), class = "b") + 
+                        prior(normal(0,1), class = "sd", dpar = "disc"),
+                      backend = "cmdstanr", silent = 2, refresh = 0)
+```
+
+The model output now has a term for the dispersion variance term.
+
+```{r}
+#| size: footnotesize
+# Model output
+tidy(fit_vdh) %>%
+  select(-c(effect, component, group)) %>% 
+  kable()
+```
+
+We can now plot the distributions for the different cities.
+
+```{r}
+# Plotting distributions
+as_draws_df(fit_vdh) %>%
+    select(starts_with("r_City["), starts_with("r_City__disc[")) %>%
+    pivot_longer(cols = everything(), names_to = "term", values_to = "value") %>%
+    mutate(
+        effect_type = case_when(
+            grepl("^r_City__disc", term) ~ "r_City__disc",
+            grepl("^r_City", term) ~ "r_City"
+        ),
+        city = sub(".*\\[(.*),.*", "\\1", term)
+    ) %>% 
+    group_by(city, effect_type) %>%
+    summarize(mean_value = mean(value), .groups = "drop") %>%
+    pivot_wider(id_cols = city, names_from = effect_type, values_from = mean_value) %>%
+    mutate(sigma = 1/exp(r_City__disc)) %>% 
+    expand(nesting(city, r_City, sigma), 
+           x = seq(from = -5.5, to = 5.5, length.out = 500)) %>% 
+    mutate(d = dlogis(x, r_City, sigma)) %>% 
+    ggplot(aes(x = x, y = d, fill = city)) + 
+    geom_area(alpha = 1/2, position = "identity") +
+    geom_vline(xintercept = fixef(fit_vdh)[1:4, 1], linetype = 3) +
+    scale_x_continuous(expression(Phi), breaks = -10:5,
+                       sec.axis = dup_axis(
+                           name = NULL,
+                           breaks = fixef(fit_vdh)[1:4, 1] %>% as.double(),
+                           labels = parse(text = str_c("alpha[", 1:4, "]"))
+                       )) +
+    scale_y_continuous(NULL, breaks = NULL) +
+    coord_cartesian(xlim = c(-5, 5)) +
+    theme_bw(base_size = 14) +
+    theme(legend.position = c(0.18,0.7),
+          legend.background = element_rect(fill = "transparent"),
+          legend.key = element_rect(fill = "transparent"),
+          legend.key.size = unit(0.3, "cm")) + 
+    labs(subtitle = "Varying hierarchical dispersion model", fill = "City")
+```
+
+We can see that there is some variation in the means of the distributions and in their dispersions.
+
+## Conclusion
+
+In this document we gave an overview of how the probabilistic programming framework can be used to perform more advanced forms of analysis of ordinal survey data. We covered varying thresholds and dispersion models.
+
+If you want an overview of the basics of how to do probabilistic analysis of ordinal survey data, you can check out the file `prob_example.qmd`.
