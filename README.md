@@ -1,3 +1,4 @@
+[![DOI](https://zenodo.org/badge/1024804070.svg)](https://doi.org/10.5281/zenodo.16360364)
 # OpenMusE project
 
 This GitHub repository is part of the [Open Music Europe](https://www.openmuse.eu) (OpenMusE) project. 
