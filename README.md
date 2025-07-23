@@ -50,6 +50,8 @@ columns and variable values.
 Another survey collected for the project is the cultural access and participation survey. The data for 
 this survey can also be found in the `input/data_processed/` directory. The file is called `cultural_access_parcipation.sav`. 
 
+All datasets included here are interim versions. The official releases, complete with standardized metadata and documentation, will be published at a later date.
+
 ## Census dashboard
 
 The census dashboard offers visualizations of the different questions in the audience census data from all the cities.
